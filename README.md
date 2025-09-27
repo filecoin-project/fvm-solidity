@@ -57,3 +57,22 @@ Note that gas costs [are roughly 444x higher in the FEVM](https://docs.filecoin.
 | FVMPay address.pay(uint256) | 4856475 |
 | FVMPay uint64.pay(uint256) | 4847666 |
 | FVMPay uint256.burn() | 3561540 |
+
+## Support
+
+### Precompiles
+
+| Supported | Name | Address |
+| :-------: | :--- | :------ |
+| ❌ | ResolveAddress | `0xfe00000000000000000000000000000000000001` |
+| ❌ | LookupDelegatedAddress | `0xfe00000000000000000000000000000000000002` |
+| ❌ | GetActorType | `0xfe00000000000000000000000000000000000004` |
+| ✅ | CallActorByAddress | `0xfe00000000000000000000000000000000000003` |
+| ✅ | CallActorById | `0xfe00000000000000000000000000000000000005` |
+
+### Methods
+
+| Supported | Name | Number |
+| :-------: | :--- | :----- |
+| ✅ | Send | 0 |
+| ❌ | Constructor | 1 |
