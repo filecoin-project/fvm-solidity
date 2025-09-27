@@ -66,8 +66,8 @@ Note that gas costs [are roughly 444x higher in the FEVM](https://docs.filecoin.
 | :-------: | :--- | :------ |
 | ❌ | ResolveAddress | `0xfe00000000000000000000000000000000000001` |
 | ❌ | LookupDelegatedAddress | `0xfe00000000000000000000000000000000000002` |
-| ❌ | GetActorType | `0xfe00000000000000000000000000000000000004` |
 | ✅ | CallActorByAddress | `0xfe00000000000000000000000000000000000003` |
+| ❌ | GetActorType | `0xfe00000000000000000000000000000000000004` |
 | ✅ | CallActorById | `0xfe00000000000000000000000000000000000005` |
 
 ### Methods
