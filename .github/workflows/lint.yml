@@ -1,0 +1,31 @@
+name: Linter
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.3.5
+
+      - name: Format
+        run: |
+          forge fmt --check
+
+      - name: Build
+        run: |
+          forge build
+
+      - name: Lint
+        run: |
+          ! (forge lint 2>&1 | grep "")
