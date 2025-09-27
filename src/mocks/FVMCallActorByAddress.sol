@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import {EMPTY_CODEC} from "../FVMCodec.sol";
 import {EXIT_SUCCESS, INSUFFICIENT_FUNDS} from "../FVMErrors.sol";
 import {NO_FLAGS} from "../FVMFlags.sol";
-import {BARE_VALUE_TRANSFER} from "../FVMMethod.sol";
+import {SEND} from "../FVMMethod.sol";
 
 contract FVMCallActorByAddress {
     fallback() external payable {
@@ -17,7 +17,7 @@ contract FVMCallActorByAddress {
         require(filAddress[1] == 0x0a, "FVMCallActorByAddress: Only f410 addresses supported");
         require(filAddress.length == 22, "FVMCallActorByAddress: Invalid f410 address length");
 
-        require(method == BARE_VALUE_TRANSFER, "FVMCallActorByAddress: Only method 0 (send) supported");
+        require(method == SEND, "FVMCallActorByAddress: Only method 0 (send) supported");
         require(flags == NO_FLAGS, "FVMCallActorByAddress: Only non-readonly calls supported");
         require(codec == EMPTY_CODEC, "FVMCallActorByAddress: Only no-codec calls supported");
         require(params.length == 0, "FVMCallActorByAddress: No params expected");
