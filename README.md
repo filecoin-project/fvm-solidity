@@ -26,6 +26,7 @@ contract BigBrain {
 ```
 
 ## Gas Profiling
+These measurements were performed on the [Demo](./src/Demo.sol) contract with the [gas-profile](./tools/gas-profile.sh) script.
 Note that gas costs [are roughly 444x higher in the FEVM](https://docs.filecoin.io/smart-contracts/filecoin-evm-runtime/difference-with-ethereum#gas-costs) compared to the EVM.
 
 | Method | Demo.sol estimateGas |
