@@ -8,6 +8,7 @@ import {FVMPay} from "../src/FVMPay.sol";
 contract BurnTest is MockFVMTest {
     using FVMPay for uint64;
     using FVMPay for uint256;
+    using FVMPay for address;
 
     function testBurn() public {
         assertEq(BURN_ADDRESS.balance, 0);
@@ -20,5 +21,11 @@ contract BurnTest is MockFVMTest {
         assertEq(BURN_ADDRESS.balance, 0);
         BURN_ACTOR_ID.pay(50 ether);
         assertEq(BURN_ADDRESS.balance, 50 ether);
+    }
+
+    function testBurnByAddress() public {
+        assertEq(BURN_ADDRESS.balance, 0);
+        address(BURN_ADDRESS).pay(60 ether);
+        assertEq(BURN_ADDRESS.balance, 60 ether);
     }
 }

@@ -1,22 +1,21 @@
 // SPDX-Lidense-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
-import {BURN_ACTOR_ID} from "../FVMActors.sol";
+import {BURN_ACTOR_ID, BURN_ADDRESS} from "../FVMActors.sol";
 import {EMPTY_CODEC} from "../FVMCodec.sol";
 import {EXIT_SUCCESS, INSUFFICIENT_FUNDS} from "../FVMErrors.sol";
+import {BARE_VALUE_TRANSFER} from "../FVMMethod.sol";
 
 contract FVMCallActorById {
-    address payable private constant BURN_ADDRESS = payable(0xff00000000000000000000000000000000000063);
-
     fallback() external payable {
         (uint64 method, uint256 value, uint64 flags, uint64 codec, bytes memory params, uint64 actorId) =
             abi.decode(msg.data, (uint64, uint256, uint64, uint64, bytes, uint64));
 
         // Verify this is a burn operation (actor ID 99, method 0)
         require(actorId == BURN_ACTOR_ID, "FVMCallActorById: Only burn actor (99) supported");
-        require(method == 0, "FVMCallActorById: Only method 0 (send) supported");
+        require(method == BARE_VALUE_TRANSFER, "FVMCallActorById: Only method 0 (send) supported");
         require(flags == 0, "FVMCallActorById: Only non-readonly calls supported");
-        require(codec == 0, "FVMCallActorById: Only no-codec calls supported");
+        require(codec == EMPTY_CODEC, "FVMCallActorById: Only no-codec calls supported");
         require(params.length == 0, "FVMCallActorById: No params expected");
 
         // Perform the burn by sending to the burn address
@@ -33,7 +32,7 @@ contract FVMCallActorById {
         }
 
         // Return the response using assembly to properly handle delegatecall return
-        assembly {
+        assembly ("memory-safe") {
             return(add(response, 0x20), mload(response))
         }
     }
