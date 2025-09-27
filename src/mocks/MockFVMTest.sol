@@ -8,7 +8,7 @@ import {FVMCallActorByAddress} from "./FVMCallActorByAddress.sol";
 import {FVMCallActorById} from "./FVMCallActorById.sol";
 
 contract MockFVMTest is Test {
-    function setUp() public {
+    function setUp() public virtual {
         vm.etch(CALL_ACTOR_BY_ADDRESS, address(new FVMCallActorByAddress()).code);
         vm.etch(CALL_ACTOR_BY_ID, address(new FVMCallActorById()).code);
     }
