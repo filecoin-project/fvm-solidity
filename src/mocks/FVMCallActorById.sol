@@ -4,6 +4,7 @@ pragma solidity ^0.8.30;
 import {BURN_ACTOR_ID, BURN_ADDRESS} from "../FVMActors.sol";
 import {EMPTY_CODEC} from "../FVMCodec.sol";
 import {EXIT_SUCCESS, INSUFFICIENT_FUNDS} from "../FVMErrors.sol";
+import {NO_FLAGS} from "../FVMFlags.sol";
 import {BARE_VALUE_TRANSFER} from "../FVMMethod.sol";
 
 contract FVMCallActorById {
@@ -14,7 +15,7 @@ contract FVMCallActorById {
         // Verify this is a burn operation (actor ID 99, method 0)
         require(actorId == BURN_ACTOR_ID, "FVMCallActorById: Only burn actor (99) supported");
         require(method == BARE_VALUE_TRANSFER, "FVMCallActorById: Only method 0 (send) supported");
-        require(flags == 0, "FVMCallActorById: Only non-readonly calls supported");
+        require(flags == NO_FLAGS, "FVMCallActorById: Only non-readonly calls supported");
         require(codec == EMPTY_CODEC, "FVMCallActorById: Only no-codec calls supported");
         require(params.length == 0, "FVMCallActorById: No params expected");
 

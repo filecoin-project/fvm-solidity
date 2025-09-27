@@ -3,6 +3,7 @@ pragma solidity ^0.8.30;
 
 import {BURN_ACTOR_ID} from "./FVMActors.sol";
 import {EMPTY_CODEC} from "./FVMCodec.sol";
+import {NO_FLAGS} from "./FVMFlags.sol";
 import {BARE_VALUE_TRANSFER} from "./FVMMethod.sol";
 import {EXIT_SUCCESS} from "./FVMErrors.sol";
 import {CALL_ACTOR_BY_ADDRESS, CALL_ACTOR_BY_ID} from "./FVMPrecompiles.sol";
@@ -17,7 +18,7 @@ library FVMPay {
             let fmp := mload(0x40)
             mstore(fmp, BARE_VALUE_TRANSFER) // method 0
             mstore(add(32, fmp), amount) // value
-            mstore(add(64, fmp), 0) // flags
+            mstore(add(64, fmp), NO_FLAGS) // flags
             mstore(add(96, fmp), EMPTY_CODEC) // codec
             mstore(add(128, fmp), 0) // params
             mstore(add(160, fmp), 192) // address offset
@@ -40,7 +41,7 @@ library FVMPay {
             let fmp := mload(0x40)
             mstore(fmp, BARE_VALUE_TRANSFER) // method 0
             mstore(add(32, fmp), amount) // value
-            mstore(add(64, fmp), 0) // flags
+            mstore(add(64, fmp), NO_FLAGS) // flags
             mstore(add(96, fmp), EMPTY_CODEC) // codec
             mstore(add(128, fmp), 0) // params
             mstore(add(160, fmp), actorId) // actor ID
@@ -60,7 +61,7 @@ library FVMPay {
             let fmp := mload(0x40)
             mstore(fmp, BARE_VALUE_TRANSFER) // method 0
             mstore(add(32, fmp), amount) // value
-            mstore(add(64, fmp), 0) // flags
+            mstore(add(64, fmp), NO_FLAGS) // flags
             mstore(add(96, fmp), EMPTY_CODEC) // codec
             mstore(add(128, fmp), 0) // params
             mstore(add(160, fmp), BURN_ACTOR_ID) // actor ID
