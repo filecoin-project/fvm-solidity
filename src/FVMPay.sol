@@ -4,9 +4,14 @@ pragma solidity ^0.8.30;
 import {BURN_ACTOR_ID} from "./FVMActors.sol";
 import {EMPTY_CODEC} from "./FVMCodec.sol";
 import {BARE_VALUE_TRANSFER} from "./FVMMethod.sol";
+import {EXIT_SUCCESS} from "./FVMErrors.sol";
 import {CALL_ACTOR_BY_ADDRESS, CALL_ACTOR_BY_ID} from "./FVMPrecompiles.sol";
 
 library FVMPay {
+    /// @notice Pay FEVM address with CallActorByAddress precompile
+    /// @param to The recipient address
+    /// @param amount Paid value (attoFIL)
+    /// @return success Whether the payment completed
     function pay(address to, uint256 amount) internal returns (bool success) {
         assembly ("memory-safe") {
             let fmp := mload(0x40)
@@ -20,12 +25,16 @@ library FVMPay {
             mstore(add(192, fmp), 22) // address size
             success :=
                 and(
-                    and(gt(returndatasize(), 31), eq(mload(fmp), 0)),
+                    and(gt(returndatasize(), 31), eq(mload(fmp), EXIT_SUCCESS)),
                     delegatecall(gas(), CALL_ACTOR_BY_ADDRESS, fmp, 256, fmp, 256)
                 )
         }
     }
 
+    /// @notice Pay FEVM actor with CallActorById precompile
+    /// @param actorId The FVM actor ID
+    /// @param amount Paid value (attoFIL)
+    /// @return success Whether the payment completed
     function pay(uint64 actorId, uint256 amount) internal returns (bool success) {
         assembly ("memory-safe") {
             let fmp := mload(0x40)
@@ -37,12 +46,15 @@ library FVMPay {
             mstore(add(160, fmp), actorId) // actor ID
             success :=
                 and(
-                    and(gt(returndatasize(), 31), eq(mload(fmp), 0)),
+                    and(gt(returndatasize(), 31), eq(mload(fmp), EXIT_SUCCESS)),
                     delegatecall(gas(), CALL_ACTOR_BY_ID, fmp, 192, fmp, 192)
                 )
         }
     }
 
+    /// @notice Destroy FIL with CallActorById precompile
+    /// @param amount Destroyed value (attoFIL)
+    /// @return success Whether the burn completed
     function burn(uint256 amount) internal returns (bool success) {
         assembly ("memory-safe") {
             let fmp := mload(0x40)
@@ -54,7 +66,7 @@ library FVMPay {
             mstore(add(160, fmp), BURN_ACTOR_ID) // actor ID
             success :=
                 and(
-                    and(gt(returndatasize(), 31), eq(mload(fmp), 0)),
+                    and(gt(returndatasize(), 31), eq(mload(fmp), EXIT_SUCCESS)),
                     delegatecall(gas(), CALL_ACTOR_BY_ID, fmp, 192, fmp, 192)
                 )
         }

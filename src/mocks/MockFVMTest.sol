@@ -7,6 +7,7 @@ import {CALL_ACTOR_BY_ADDRESS, CALL_ACTOR_BY_ID} from "../FVMPrecompiles.sol";
 import {FVMCallActorByAddress} from "./FVMCallActorByAddress.sol";
 import {FVMCallActorById} from "./FVMCallActorById.sol";
 
+/// @notice Mocks the FVM precompiles for forge test
 contract MockFVMTest is Test {
     function setUp() public virtual {
         vm.etch(CALL_ACTOR_BY_ADDRESS, address(new FVMCallActorByAddress()).code);

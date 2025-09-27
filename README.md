@@ -22,6 +22,27 @@ contract BigBrain {
     function payEfficiently(address recipient) external payable {
         recipient.pay(msg.value);
     }
+
+    using FVMPay for uint256;
+
+    function burnEfficiently() external payable {
+        msg.value.burn();
+    }
+}
+```
+
+### Testing
+```solidity
+import {BURN_ADDRESS} from "fvm-solidity/FVMActors.sol";
+import {MockFVMTest} from "fvm-solidity/mocks/MockFVMTest.sol";
+
+// MockFVMTest is Test
+contract BigBrainTest is MockFVMTest {
+    function setUp() public override {
+        // Mock the FVM precompiles for forge test
+        super.setUp();
+        /* ... */
+    }
 }
 ```
 
