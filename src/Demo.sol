@@ -2,6 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {FVMPay} from "./FVMPay.sol";
+import {FVMRandom} from "./FVMRandom.sol";
 
 contract Demo {
     // baseline solidity methods using CALL opcode
@@ -33,5 +34,20 @@ contract Demo {
 
     function burn() external payable {
         require(msg.value.burn());
+    }
+
+    // randomness
+    using FVMRandom for uint256;
+
+    function prev() external view returns (uint256 randomness) {
+        randomness = (block.number - 1).drand();
+    }
+
+    function curr() external view returns (uint256 randomness) {
+        randomness = block.number.drand();
+    }
+
+    function next() external view returns (uint256 randomness) {
+        randomness = (block.number + 1).drand();
     }
 }
