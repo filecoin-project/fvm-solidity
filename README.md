@@ -60,6 +60,8 @@ Note that gas costs [are roughly 444x higher in the FEVM](https://docs.filecoin.
 
 ## Support
 
+Additional FVM support can be found in the [filecoin-solidity library](https://github.com/filecoin-project/filecoin-solidity).
+
 ### Precompiles
 
 | Supported | Name | Address |
