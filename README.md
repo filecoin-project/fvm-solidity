@@ -71,7 +71,7 @@ Additional FVM support can be found in the [filecoin-solidity library](https://g
 | ✅ | CallActorByAddress | `0xfe00000000000000000000000000000000000003` |
 | ❌ | GetActorType | `0xfe00000000000000000000000000000000000004` |
 | ✅ | CallActorById | `0xfe00000000000000000000000000000000000005` |
-| ✅ | GetDrandByEpoch | `0xfe00000000000000000000000000000000000006` |
+| ✅ | GetBeaconRandomness | `0xfe00000000000000000000000000000000000006` |
 
 ### Methods
 

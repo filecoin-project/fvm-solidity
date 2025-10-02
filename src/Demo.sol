@@ -40,14 +40,14 @@ contract Demo {
     using FVMRandom for uint256;
 
     function prev() external view returns (uint256 randomness) {
-        randomness = (block.number - 1).drand();
+        randomness = (block.number - 1).getBeaconRandomness();
     }
 
     function curr() external view returns (uint256 randomness) {
-        randomness = block.number.drand();
+        randomness = block.number.getBeaconRandomness();
     }
 
     function next() external view returns (uint256 randomness) {
-        randomness = (block.number + 1).drand();
+        randomness = (block.number + 1).getBeaconRandomness();
     }
 }
