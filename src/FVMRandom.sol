@@ -4,7 +4,10 @@ pragma solidity ^0.8.30;
 import {GET_BEACON_RANDOMNESS} from "./FVMPrecompiles.sol";
 
 library FVMRandom {
-    // the precompile will assert and consume all gas if epoch > block.number
+    // Performs the get_beacon_randomness syscall via the GET_BEACON_RANDOMNESS precompile
+    // The precompile will assert and consume all gas if epoch > block.number
+    // This error cannot be caught even if you supply less gas to the staticcall
+    // The entire transaction will fail with out of gas
     function getBeaconRandomness(uint256 epoch) internal view returns (uint256 randomness) {
         assembly ("memory-safe") {
             let fmp := mload(0x40)
