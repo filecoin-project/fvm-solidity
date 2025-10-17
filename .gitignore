@@ -2,5 +2,8 @@
 cache
 out
 
+# forge flatten
+*.flat.sol
+
 # VIM
 *.swp
