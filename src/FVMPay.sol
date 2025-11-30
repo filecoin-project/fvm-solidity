@@ -24,11 +24,10 @@ library FVMPay {
             mstore(add(160, fmp), 192) // address offset
             mstore(add(214, fmp), or(0x040a0000000000000000000000000000000000000000, to)) // address
             mstore(add(192, fmp), 22) // address size
-            success :=
-                and(
-                    and(gt(returndatasize(), 31), eq(mload(fmp), EXIT_SUCCESS)),
-                    delegatecall(gas(), CALL_ACTOR_BY_ADDRESS, fmp, 256, fmp, 256)
-                )
+            success := and(
+                and(gt(returndatasize(), 31), eq(mload(fmp), EXIT_SUCCESS)),
+                delegatecall(gas(), CALL_ACTOR_BY_ADDRESS, fmp, 256, fmp, 256)
+            )
         }
     }
 
@@ -45,11 +44,10 @@ library FVMPay {
             mstore(add(96, fmp), EMPTY_CODEC) // codec
             mstore(add(128, fmp), 0) // params
             mstore(add(160, fmp), actorId) // actor ID
-            success :=
-                and(
-                    and(gt(returndatasize(), 31), eq(mload(fmp), EXIT_SUCCESS)),
-                    delegatecall(gas(), CALL_ACTOR_BY_ID, fmp, 192, fmp, 192)
-                )
+            success := and(
+                and(gt(returndatasize(), 31), eq(mload(fmp), EXIT_SUCCESS)),
+                delegatecall(gas(), CALL_ACTOR_BY_ID, fmp, 192, fmp, 192)
+            )
         }
     }
 
@@ -65,11 +63,10 @@ library FVMPay {
             mstore(add(96, fmp), EMPTY_CODEC) // codec
             mstore(add(128, fmp), 0) // params
             mstore(add(160, fmp), BURN_ACTOR_ID) // actor ID
-            success :=
-                and(
-                    and(gt(returndatasize(), 31), eq(mload(fmp), EXIT_SUCCESS)),
-                    delegatecall(gas(), CALL_ACTOR_BY_ID, fmp, 192, fmp, 192)
-                )
+            success := and(
+                and(gt(returndatasize(), 31), eq(mload(fmp), EXIT_SUCCESS)),
+                delegatecall(gas(), CALL_ACTOR_BY_ID, fmp, 192, fmp, 192)
+            )
         }
     }
 }
