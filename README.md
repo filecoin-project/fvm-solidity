@@ -66,7 +66,7 @@ Additional FVM support can be found in the [filecoin-solidity library](https://g
 
 | Supported | Name | Address |
 | :-------: | :--- | :------ |
-| ❌ | ResolveAddress | `0xfe00000000000000000000000000000000000001` |
+| ✅ | ResolveAddress | `0xfe00000000000000000000000000000000000001` |
 | ❌ | LookupDelegatedAddress | `0xfe00000000000000000000000000000000000002` |
 | ✅ | CallActorByAddress | `0xfe00000000000000000000000000000000000003` |
 | ✅ | CallActorById | `0xfe00000000000000000000000000000000000005` |
