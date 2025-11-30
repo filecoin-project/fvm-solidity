@@ -4,7 +4,11 @@ pragma solidity ^0.8.30;
 import {LOOKUP_DELEGATED_ADDRESS} from "./FVMPrecompiles.sol";
 
 library FVMAddress {
-    function lookupDelegatedAddress(uint64 actorId) internal view returns (bool success, bytes memory delegatedAddress) {
+    function lookupDelegatedAddress(uint64 actorId)
+        internal
+        view
+        returns (bool success, bytes memory delegatedAddress)
+    {
         (success, delegatedAddress) = LOOKUP_DELEGATED_ADDRESS.staticcall(abi.encode(uint256(actorId)));
     }
 
