@@ -3,6 +3,7 @@ pragma solidity ^0.8.30;
 
 import {FVMPay} from "./FVMPay.sol";
 import {FVMRandom} from "./FVMRandom.sol";
+import {FVMResolveAddress} from "./FVMResolveAddress.sol";
 
 contract Demo {
     // baseline solidity methods using CALL opcode
@@ -49,5 +50,18 @@ contract Demo {
 
     function next() external view returns (uint256 randomness) {
         randomness = (block.number + 1).getBeaconRandomness();
+    }
+
+    // resolve address
+    using FVMResolveAddress for bytes;
+
+    /// @notice Resolve a Filecoin address into an actor ID
+    function resolve(bytes calldata filAddress) external view returns (bool exists, uint64 actorId) {
+        return filAddress.resolveAddress();
+    }
+
+    /// @notice Resolve a Filecoin address and require the actor exists
+    function resolveStrict(bytes calldata filAddress) external view returns (uint64 actorId) {
+        return filAddress.resolveAddressStrict();
     }
 }
