@@ -10,9 +10,6 @@ library FVMResolveAddress {
     /// @return exists Whether the actor exists
     /// @return actorId The actor ID (uint64), valid only if exists is true
     function tryGetActorId(bytes memory filAddress) internal view returns (bool exists, uint64 actorId) {
-        uint256 result;
-        bool hasResult;
-
         assembly ("memory-safe") {
             // Get pointer to the input data and its length
             let len := mload(filAddress)
@@ -37,12 +34,12 @@ library FVMResolveAddress {
             switch returnSize
             case 0 {
                 // Case A: Actor does not exist (Valid format, but no ID found)
-                hasResult := 0
-                result := 0
+                exists := 0
+                actorId := 0
             }
             case 32 {
                 // Case B: Actor exists (Returns ABI-encoded uint64)
-                hasResult := 1
+                exists := 1
                 actorId := mload(fmt)
             }
             default {
@@ -52,8 +49,6 @@ library FVMResolveAddress {
                 revert(0, 0)
             }
         }
-
-        exists = hasResult;
     }
 
     /// @notice Gets the actor ID for a Filecoin address, requiring the actor exists
