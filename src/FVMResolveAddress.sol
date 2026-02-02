@@ -43,7 +43,7 @@ library FVMResolveAddress {
             case 32 {
                 // Case B: Actor exists (Returns ABI-encoded uint64)
                 hasResult := 1
-                result := mload(fmt)
+                actorId := mload(fmt)
             }
             default {
                 // Case C: Unexpected return length (Protocol violation/Update)
@@ -54,7 +54,6 @@ library FVMResolveAddress {
         }
 
         exists = hasResult;
-        actorId = uint64(result);
     }
 
     /// @notice Gets the actor ID for a Filecoin address, requiring the actor exists
