@@ -60,8 +60,8 @@ contract Demo {
         return filAddress.resolveAddress();
     }
 
-    /// @notice Resolve a Filecoin address and require the actor exists
-    function resolveStrict(bytes calldata filAddress) external view returns (uint64 actorId) {
-        return filAddress.resolveAddressStrict();
+    /// @notice Get the actor ID for a Filecoin address, requiring the actor exists
+    function getActorId(bytes calldata filAddress) external view returns (uint64 actorId) {
+        return filAddress.getActorId();
     }
 }

@@ -57,11 +57,11 @@ library FVMResolveAddress {
         actorId = uint64(result);
     }
 
-    /// @notice Resolves a Filecoin address to an actor ID, requiring the actor exists
+    /// @notice Gets the actor ID for a Filecoin address, requiring the actor exists
     /// @dev Reverts if the address is invalid or actor doesn't exist
     /// @param filAddress The Filecoin address in bytes representation
     /// @return actorId The actor ID (uint64)
-    function resolveAddressStrict(bytes memory filAddress) internal view returns (uint64 actorId) {
+    function getActorId(bytes memory filAddress) internal view returns (uint64 actorId) {
         bool exists;
         (exists, actorId) = resolveAddress(filAddress);
         require(exists, "FVMResolveAddress: actor not found");

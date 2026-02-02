@@ -8,8 +8,8 @@ contract ResolveAddressTest is MockFVMTest {
     using FVMResolveAddress for bytes;
 
     // Helper function to wrap the library call
-    function _resolveAddressStrict(bytes memory filAddress) public view returns (uint64) {
-        return filAddress.resolveAddressStrict();
+    function _getActorId(bytes memory filAddress) public view returns (uint64) {
+        return filAddress.getActorId();
     }
 
     function f0(uint64 actorId) internal pure returns (bytes memory) {
@@ -45,22 +45,22 @@ contract ResolveAddressTest is MockFVMTest {
         assertEq(actorId, 0, "Actor ID should be 0");
     }
 
-    function testResolveAddressStrict() public {
+    function testGetActorId() public {
         bytes memory filAddress = f0(1234);
         uint64 expectedActorId = 1234;
 
         RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(filAddress, expectedActorId);
 
-        uint64 actorId = filAddress.resolveAddressStrict();
+        uint64 actorId = filAddress.getActorId();
         assertEq(actorId, expectedActorId, "Actor ID should match");
     }
 
-    function testResolveAddressStrictReverts() public {
+    function testGetActorIdReverts() public {
         bytes memory filAddress = f0(2500);
 
         // Should revert because actor doesn't exist
         vm.expectRevert("FVMResolveAddress: actor not found");
-        this._resolveAddressStrict(filAddress);
+        this._getActorId(filAddress);
     }
 
     function testResolveInvalidAddress() public {
@@ -68,7 +68,7 @@ contract ResolveAddressTest is MockFVMTest {
         bytes memory invalidAddress = hex"0504d2";
 
         vm.expectRevert("Invalid address: unknown protocol");
-        this._resolveAddressStrict(invalidAddress);
+        this._getActorId(invalidAddress);
     }
 
     function testResolveF410Address() public {
