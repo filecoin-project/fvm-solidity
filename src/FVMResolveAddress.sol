@@ -31,23 +31,11 @@ library FVMResolveAddress {
             // Check return data size to determine existence
             let returnSize := returndatasize()
 
-            switch returnSize
-            case 0 {
-                // Case A: Actor does not exist (Valid format, but no ID found)
-                exists := 0
-                actorId := 0
-            }
-            case 32 {
-                // Case B: Actor exists (Returns ABI-encoded uint64)
+            // Actor exists if ANY data is returned
+            if returnSize {
                 exists := 1
                 actorId := mload(fmt)
-            }
-            default {
-                // Case C: Unexpected return length (Protocol violation/Update)
-                // Revert to avoid silent failure or misinterpretation
-                // We use a generic revert here, equivalent to "Invalid Return Size"
-                revert(0, 0)
-            }
+            }  
         }
     }
 
