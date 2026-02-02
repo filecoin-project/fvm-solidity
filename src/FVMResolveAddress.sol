@@ -15,12 +15,9 @@ library FVMResolveAddress {
             let len := mload(filAddress)
             let dataPtr := add(filAddress, 0x20)
 
-            // Prepare output destination (Free memory Pointer)
-            let fmt := mload(0x40)
-
             // Call the precompile
             // args: gas, address, input offset, input size, output offset, output size
-            let success := staticcall(gas(), RESOLVE_ADDRESS, dataPtr, len, fmt, 32)
+            let success := staticcall(gas(), RESOLVE_ADDRESS, dataPtr, len, 0, 32)
 
             // Handle execution failure (invalid address format)
             if iszero(success) {
@@ -34,7 +31,7 @@ library FVMResolveAddress {
             // Actor exists if ANY data is returned
             if returnSize {
                 exists := 1
-                actorId := mload(fmt)
+                actorId := mload(0)
             }  
         }
     }
