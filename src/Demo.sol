@@ -55,9 +55,9 @@ contract Demo {
     // resolve address
     using FVMResolveAddress for bytes;
 
-    /// @notice Resolve a Filecoin address into an actor ID
-    function resolve(bytes calldata filAddress) external view returns (bool exists, uint64 actorId) {
-        return filAddress.resolveAddress();
+    /// @notice Try to get the actor ID for a Filecoin address
+    function tryGetActorId(bytes calldata filAddress) external view returns (bool exists, uint64 actorId) {
+        return filAddress.tryGetActorId();
     }
 
     /// @notice Get the actor ID for a Filecoin address, requiring the actor exists

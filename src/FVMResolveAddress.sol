@@ -4,12 +4,12 @@ pragma solidity ^0.8.30;
 import {RESOLVE_ADDRESS} from "./FVMPrecompiles.sol";
 
 library FVMResolveAddress {
-    /// @notice Resolves a Filecoin address to an actor ID
+    /// @notice Tries to get the actor ID for a Filecoin address
     /// @dev Reverts if the address is invalid.  Returns (false, 0) if actor doesn't exist.
     /// @param filAddress The Filecoin address in bytes representation (e.g., f01, f2abcde)
     /// @return exists Whether the actor exists
     /// @return actorId The actor ID (uint64), valid only if exists is true
-    function resolveAddress(bytes memory filAddress) internal view returns (bool exists, uint64 actorId) {
+    function tryGetActorId(bytes memory filAddress) internal view returns (bool exists, uint64 actorId) {
         uint256 result;
         bool hasResult;
 
@@ -63,7 +63,7 @@ library FVMResolveAddress {
     /// @return actorId The actor ID (uint64)
     function getActorId(bytes memory filAddress) internal view returns (uint64 actorId) {
         bool exists;
-        (exists, actorId) = resolveAddress(filAddress);
+        (exists, actorId) = tryGetActorId(filAddress);
         require(exists, "FVMResolveAddress: actor not found");
     }
 }

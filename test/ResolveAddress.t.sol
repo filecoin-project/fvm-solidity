@@ -21,25 +21,25 @@ contract ResolveAddressTest is MockFVMTest {
         return abi.encodePacked(uint8(0x04), namespace, subaddress);
     }
 
-    function testResolveExistingActor() public {
+    function testTryGetActorIdExists() public {
         // Mock a Filecoin address (f01234)
         bytes memory filAddress = f0(1234); // f0 protocol + actor ID 1234
         uint64 expectedActorId = 1234;
 
         RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(filAddress, expectedActorId);
 
-        (bool exists, uint64 actorId) = filAddress.resolveAddress();
+        (bool exists, uint64 actorId) = filAddress.tryGetActorId();
 
         assertTrue(exists, "Actor should exist");
         assertEq(actorId, expectedActorId, "Actor ID should match");
     }
 
-    function testResolveNonExistentActor() public {
+    function testTryGetActorIdDoesNotExists() public {
         // Mock a Filecoin address that doesn't exist
         bytes memory filAddress = f0(2500);
 
         // Don't mock it, so it returns 0 (doesn't exist)
-        (bool exists, uint64 actorId) = filAddress.resolveAddress();
+        (bool exists, uint64 actorId) = filAddress.tryGetActorId();
 
         assertFalse(exists, "Actor should not exist");
         assertEq(actorId, 0, "Actor ID should be 0");
@@ -71,14 +71,14 @@ contract ResolveAddressTest is MockFVMTest {
         this._getActorId(invalidAddress);
     }
 
-    function testResolveF410Address() public {
+    function testTryGetActorIdF410() public {
         // f410 address (delegated address format)
         bytes memory f410Address = f410(0x0a, bytes20(0x1234567890123456789012345678901234567890));
         uint64 expectedActorId = 9999;
 
         RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(f410Address, expectedActorId);
 
-        (bool exists, uint64 actorId) = f410Address.resolveAddress();
+        (bool exists, uint64 actorId) = f410Address.tryGetActorId();
 
         assertTrue(exists, "Actor should exist");
         assertEq(actorId, expectedActorId, "Actor ID should match");
