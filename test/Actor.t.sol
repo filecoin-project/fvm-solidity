@@ -28,7 +28,7 @@ contract ResolveAddressTest is MockFVMTest {
         // System singleton actors (1-7, 10, 99) should be pre-mocked
         // Note: actor ID 0 (SYSTEM_ACTOR) cannot be tested because the mock
         // uses actorId == 0 as the sentinel for "not found"
-        uint64[9] memory knownActors = [uint64(1), 2, 3, 4, 5, 6, 7, 10, 99];
+        uint64[10] memory knownActors = [uint64(0), 1, 2, 3, 4, 5, 6, 7, 10, 99];
 
         for (uint256 i = 0; i < knownActors.length; i++) {
             // Use same encoding as _mockf0: protocol byte + uint8 actor ID

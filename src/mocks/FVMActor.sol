@@ -17,6 +17,10 @@ import {FVMAddress} from "../FVMAddress.sol";
 
 contract FVMActor {
     using FVMAddress for uint64;
+
+    /// @dev keccak256 of f0(0) = keccak256(hex"0000") — protocol byte 0x00 + ULEB128(0) = 0x00
+    bytes32 constant SYSTEM_ACTOR_HASH = keccak256(hex"0000");
+
     // Mapping from Filecoin address bytes to actor ID
     mapping(bytes32 => uint64) public addressMocks;
 
@@ -78,7 +82,8 @@ contract FVMActor {
         uint64 actorId = addressMocks[key];
 
         // If actor exists (actorId > 0), return it as ABI-encoded uint64
-        if (actorId > 0) {
+        // Special case: SYSTEM_ACTOR_ID is 0, but we want to allow it to be mocked and returned
+        if (actorId > 0 || key == SYSTEM_ACTOR_HASH) {
             bytes memory response = abi.encode(uint256(actorId));
             assembly ("memory-safe") {
                 return(add(response, 0x20), 32)
