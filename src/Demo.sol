@@ -3,7 +3,7 @@ pragma solidity ^0.8.30;
 
 import {FVMPay} from "./FVMPay.sol";
 import {FVMRandom} from "./FVMRandom.sol";
-import {FVMResolveAddress} from "./FVMResolveAddress.sol";
+import {FVMActor} from "./FVMActor.sol";
 
 contract Demo {
     // baseline solidity methods using CALL opcode
@@ -53,7 +53,8 @@ contract Demo {
     }
 
     // resolve address
-    using FVMResolveAddress for bytes;
+    using FVMActor for bytes;
+    using FVMActor for address;
 
     /// @notice Try to get the actor ID for a Filecoin address
     function tryGetActorId(bytes calldata filAddress) external view returns (bool exists, uint64 actorId) {
@@ -63,5 +64,15 @@ contract Demo {
     /// @notice Get the actor ID for a Filecoin address, requiring the actor exists
     function getActorId(bytes calldata filAddress) external view returns (uint64 actorId) {
         return filAddress.getActorId();
+    }
+
+    /// @notice Try to get the actor ID for a Solidity address
+    function tryGetActorId(address addr) external view returns (bool exists, uint64 actorId) {
+        return addr.tryGetActorId();
+    }
+
+    /// @notice Get the actor ID for a Solidity address, requiring the actor exists
+    function getActorId(address addr) external view returns (uint64 actorId) {
+        return addr.getActorId();
     }
 }

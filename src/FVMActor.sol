@@ -3,7 +3,7 @@ pragma solidity ^0.8.30;
 
 import {RESOLVE_ADDRESS} from "./FVMPrecompiles.sol";
 
-library FVMResolveAddress {
+library FVMActor {
     // =============================================================
     //                    BYTES IMPLEMENTATION
     // =============================================================

@@ -2,11 +2,11 @@
 pragma solidity ^0.8.30;
 
 import {MockFVMTest} from "../src/mocks/MockFVMTest.sol";
-import {FVMResolveAddress} from "../src/FVMResolveAddress.sol";
+import {FVMActor} from "../src/FVMActor.sol";
 
 contract ResolveAddressTest is MockFVMTest {
-    using FVMResolveAddress for bytes;
-    using FVMResolveAddress for address;
+    using FVMActor for bytes;
+    using FVMActor for address;
 
     // Helper function to wrap the library call
     function _getActorIdBytes(bytes memory filAddress) public view returns (uint64) {
