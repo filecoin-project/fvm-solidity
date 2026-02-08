@@ -6,10 +6,15 @@ import {FVMResolveAddress} from "../src/FVMResolveAddress.sol";
 
 contract ResolveAddressTest is MockFVMTest {
     using FVMResolveAddress for bytes;
+    using FVMResolveAddress for address;
 
     // Helper function to wrap the library call
-    function _getActorId(bytes memory filAddress) public view returns (uint64) {
+    function _getActorIdBytes(bytes memory filAddress) public view returns (uint64) {
         return filAddress.getActorId();
+    }
+
+    function _getActorIdAddress(address addr) public view returns (uint64) {
+        return addr.getActorId();
     }
 
     function f0(uint64 actorId) internal pure returns (bytes memory) {
@@ -20,6 +25,10 @@ contract ResolveAddressTest is MockFVMTest {
     function f410(uint8 namespace, bytes20 subaddress) internal pure returns (bytes memory) {
         return abi.encodePacked(uint8(0x04), namespace, subaddress);
     }
+
+    // =============================================================
+    //                  BYTES TESTS
+    // =============================================================
 
     function testTryGetActorIdExists() public {
         // Mock a Filecoin address (f01234)
@@ -60,7 +69,7 @@ contract ResolveAddressTest is MockFVMTest {
 
         // Should revert because actor doesn't exist
         vm.expectRevert("FVMResolveAddress: actor not found");
-        this._getActorId(filAddress);
+        this._getActorIdBytes(filAddress);
     }
 
     function testResolveInvalidAddress() public {
@@ -68,7 +77,7 @@ contract ResolveAddressTest is MockFVMTest {
         bytes memory invalidAddress = hex"0504d2";
 
         vm.expectRevert("Invalid address: unknown protocol");
-        this._getActorId(invalidAddress);
+        this._getActorIdBytes(invalidAddress);
     }
 
     function testTryGetActorIdF410() public {
@@ -82,5 +91,47 @@ contract ResolveAddressTest is MockFVMTest {
 
         assertTrue(exists, "Actor should exist");
         assertEq(actorId, expectedActorId, "Actor ID should match");
+    }
+
+    // =============================================================
+    //                  ADDRESS (EVM) TESTS
+    // =============================================================
+
+    function testTryGetActorIdAddressExists() public {
+        address addr = address(0x1234567890123456789012345678901234567890);
+        uint64 expectedActorId = 5678;
+
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(addr, expectedActorId);
+
+        (bool exists, uint64 actorId) = addr.tryGetActorId();
+
+        assertTrue(exists, "Actor should exist");
+        assertEq(actorId, expectedActorId, "Actor ID should match");
+    }
+
+    function testTryGetActorIdAddressDoesNotExist() public {
+        address addr = address(0xdead);
+
+        (bool exists, uint64 actorId) = addr.tryGetActorId();
+
+        assertFalse(exists, "Actor should not exist");
+        assertEq(actorId, 0, "Actor ID should be 0");
+    }
+
+    function testGetActorIdAddress() public {
+        address addr = address(0x1234567890123456789012345678901234567890);
+        uint64 expectedActorId = 5678;
+
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(addr, expectedActorId);
+
+        uint64 actorId = addr.getActorId();
+        assertEq(actorId, expectedActorId, "Actor ID should match");
+    }
+
+    function testGetActorIdAddressReverts() public {
+        address addr = address(0xdead);
+
+        vm.expectRevert("FVMResolveAddress: actor not found");
+        this._getActorIdAddress(addr);
     }
 }

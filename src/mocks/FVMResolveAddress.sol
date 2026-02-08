@@ -12,6 +12,14 @@ contract FVMResolveAddress {
         addressMocks[keccak256(filAddress)] = actorId;
     }
 
+    /// @notice Mock a Solidity address resolution
+    /// @param addr The Solidity address
+    /// @param actorId The actor ID to return (0 means doesn't exist)
+    function mockResolveAddress(address addr, uint64 actorId) external {
+        bytes memory filAddress = abi.encodePacked(uint8(0x04), uint8(0x0a), addr);
+        addressMocks[keccak256(filAddress)] = actorId;
+    }
+
     fallback() external {
         bytes memory filAddress = msg.data;
 
