@@ -26,6 +26,10 @@ contract ResolveAddressTest is MockFVMTest {
         return abi.encodePacked(uint8(0x04), namespace, subaddress);
     }
 
+    function f410(address addr) internal pure returns (bytes memory) {
+        return f410(0x0a, bytes20(addr));
+    }
+
     // =============================================================
     //                  BYTES TESTS
     // =============================================================
@@ -82,7 +86,7 @@ contract ResolveAddressTest is MockFVMTest {
 
     function testTryGetActorIdF410() public {
         // f410 address (delegated address format)
-        bytes memory f410Address = f410(0x0a, bytes20(0x1234567890123456789012345678901234567890));
+        bytes memory f410Address = f410(address(0x1234567890123456789012345678901234567890));
         uint64 expectedActorId = 9999;
 
         RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(f410Address, expectedActorId);
