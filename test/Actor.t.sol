@@ -31,6 +31,38 @@ contract ResolveAddressTest is MockFVMTest {
     }
 
     // =============================================================
+    //                  CONSTRUCTOR MOCK TESTS
+    // =============================================================
+
+    function testConstructorMocksSystemActors() public view {
+        // System singleton actors (1-7, 10, 99) should be pre-mocked
+        // Note: actor ID 0 (SYSTEM_ACTOR) cannot be tested because the mock
+        // uses actorId == 0 as the sentinel for "not found"
+        uint64[9] memory knownActors = [uint64(1), 2, 3, 4, 5, 6, 7, 10, 99];
+
+        for (uint256 i = 0; i < knownActors.length; i++) {
+            // Use same encoding as _mockf0: protocol byte + uint8 actor ID
+            bytes memory filAddress = abi.encodePacked(uint8(0x00), uint8(knownActors[i]));
+            (bool exists, uint64 actorId) = filAddress.tryGetActorId();
+
+            assertTrue(exists, "Known actor should exist");
+            assertEq(actorId, knownActors[i], "Actor ID should match");
+        }
+    }
+
+    function testConstructorDoesNotMockUnknownActors() public view {
+        // Actor IDs 8 and 9 should NOT be mocked
+        bytes memory f0_8 = abi.encodePacked(uint8(0x00), uint8(8));
+        bytes memory f0_9 = abi.encodePacked(uint8(0x00), uint8(9));
+
+        (bool exists8,) = f0_8.tryGetActorId();
+        (bool exists9,) = f0_9.tryGetActorId();
+
+        assertFalse(exists8, "Actor 8 should not exist");
+        assertFalse(exists9, "Actor 9 should not exist");
+    }
+
+    // =============================================================
     //                  BYTES TESTS
     // =============================================================
 
@@ -39,7 +71,7 @@ contract ResolveAddressTest is MockFVMTest {
         bytes memory filAddress = f0(1234); // f0 protocol + actor ID 1234
         uint64 expectedActorId = 1234;
 
-        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(filAddress, expectedActorId);
+        ACTOR_PRECOMPILE.mockResolveAddress(filAddress, expectedActorId);
 
         (bool exists, uint64 actorId) = filAddress.tryGetActorId();
 
@@ -62,7 +94,7 @@ contract ResolveAddressTest is MockFVMTest {
         bytes memory filAddress = f0(1234);
         uint64 expectedActorId = 1234;
 
-        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(filAddress, expectedActorId);
+        ACTOR_PRECOMPILE.mockResolveAddress(filAddress, expectedActorId);
 
         uint64 actorId = filAddress.getActorId();
         assertEq(actorId, expectedActorId, "Actor ID should match");
@@ -72,7 +104,7 @@ contract ResolveAddressTest is MockFVMTest {
         bytes memory filAddress = f0(2500);
 
         // Should revert because actor doesn't exist
-        vm.expectRevert("FVMResolveAddress: actor not found");
+        vm.expectRevert("FVMActor: actor not found");
         this._getActorIdBytes(filAddress);
     }
 
@@ -89,7 +121,7 @@ contract ResolveAddressTest is MockFVMTest {
         bytes memory f410Address = f410(address(0x1234567890123456789012345678901234567890));
         uint64 expectedActorId = 9999;
 
-        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(f410Address, expectedActorId);
+        ACTOR_PRECOMPILE.mockResolveAddress(f410Address, expectedActorId);
 
         (bool exists, uint64 actorId) = f410Address.tryGetActorId();
 
@@ -105,7 +137,7 @@ contract ResolveAddressTest is MockFVMTest {
         address addr = address(0x1234567890123456789012345678901234567890);
         uint64 expectedActorId = 5678;
 
-        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(addr, expectedActorId);
+        ACTOR_PRECOMPILE.mockResolveAddress(addr, expectedActorId);
 
         (bool exists, uint64 actorId) = addr.tryGetActorId();
 
@@ -126,7 +158,7 @@ contract ResolveAddressTest is MockFVMTest {
         address addr = address(0x1234567890123456789012345678901234567890);
         uint64 expectedActorId = 5678;
 
-        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(addr, expectedActorId);
+        ACTOR_PRECOMPILE.mockResolveAddress(addr, expectedActorId);
 
         uint64 actorId = addr.getActorId();
         assertEq(actorId, expectedActorId, "Actor ID should match");
@@ -135,7 +167,7 @@ contract ResolveAddressTest is MockFVMTest {
     function testGetActorIdAddressReverts() public {
         address addr = address(0xdead);
 
-        vm.expectRevert("FVMResolveAddress: actor not found");
+        vm.expectRevert("FVMActor: actor not found");
         this._getActorIdAddress(addr);
     }
 }

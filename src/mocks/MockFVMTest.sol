@@ -7,17 +7,20 @@ import {CALL_ACTOR_BY_ADDRESS, CALL_ACTOR_BY_ID, GET_BEACON_RANDOMNESS, RESOLVE_
 import {FVMCallActorByAddress} from "./FVMCallActorByAddress.sol";
 import {FVMCallActorById} from "./FVMCallActorById.sol";
 import {FVMGetBeaconRandomness} from "./FVMGetBeaconRandomness.sol";
-import {FVMResolveAddress} from "./FVMResolveAddress.sol";
+import {FVMActor} from "./FVMActor.sol";
 
 /// @notice Mocks the FVM precompiles for forge test
 contract MockFVMTest is Test {
     FVMGetBeaconRandomness public constant RANDOMNESS_PRECOMPILE = FVMGetBeaconRandomness(GET_BEACON_RANDOMNESS);
-    FVMResolveAddress public constant RESOLVE_ADDRESS_PRECOMPILE = FVMResolveAddress(RESOLVE_ADDRESS);
+    FVMActor public constant ACTOR_PRECOMPILE = FVMActor(RESOLVE_ADDRESS);
 
     function setUp() public virtual {
         vm.etch(CALL_ACTOR_BY_ADDRESS, address(new FVMCallActorByAddress()).code);
         vm.etch(CALL_ACTOR_BY_ID, address(new FVMCallActorById()).code);
         vm.etch(GET_BEACON_RANDOMNESS, address(new FVMGetBeaconRandomness()).code);
-        vm.etch(RESOLVE_ADDRESS, address(new FVMResolveAddress()).code);
+        
+        address deployed = address(new FVMActor());
+        vm.etch(RESOLVE_ADDRESS, deployed.code);
+        vm.copyStorage(deployed, RESOLVE_ADDRESS);
     }
 }

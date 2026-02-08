@@ -47,7 +47,7 @@ library FVMActor {
     function getActorId(bytes memory filAddress) internal view returns (uint64 actorId) {
         bool exists;
         (exists, actorId) = tryGetActorId(filAddress);
-        require(exists, "FVMResolveAddress: actor not found");
+        require(exists, "FVMActor: actor not found");
     }
 
     // =============================================================
@@ -83,6 +83,6 @@ library FVMActor {
     function getActorId(address addr) internal view returns (uint64 actorId) {
         bool exists;
         (exists, actorId) = tryGetActorId(addr);
-        require(exists, "FVMResolveAddress: actor not found");
+        require(exists, "FVMActor: actor not found");
     }
 }
