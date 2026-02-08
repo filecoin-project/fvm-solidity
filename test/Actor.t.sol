@@ -3,10 +3,13 @@ pragma solidity ^0.8.30;
 
 import {MockFVMTest} from "../src/mocks/MockFVMTest.sol";
 import {FVMActor} from "../src/FVMActor.sol";
+import {FVMAddress} from "../src/FVMAddress.sol";
 
 contract ResolveAddressTest is MockFVMTest {
     using FVMActor for bytes;
     using FVMActor for address;
+    using FVMAddress for uint64;
+    using FVMAddress for address;
 
     // Helper function to wrap the library call
     function _getActorIdBytes(bytes memory filAddress) public view returns (uint64) {
@@ -15,19 +18,6 @@ contract ResolveAddressTest is MockFVMTest {
 
     function _getActorIdAddress(address addr) public view returns (uint64) {
         return addr.getActorId();
-    }
-
-    function f0(uint64 actorId) internal pure returns (bytes memory) {
-        // f0 address = protocol byte (0x00) + big-endian actor ID
-        return abi.encodePacked(uint8(0x00), actorId);
-    }
-
-    function f410(uint8 namespace, bytes20 subaddress) internal pure returns (bytes memory) {
-        return abi.encodePacked(uint8(0x04), namespace, subaddress);
-    }
-
-    function f410(address addr) internal pure returns (bytes memory) {
-        return f410(0x0a, bytes20(addr));
     }
 
     // =============================================================
@@ -42,7 +32,7 @@ contract ResolveAddressTest is MockFVMTest {
 
         for (uint256 i = 0; i < knownActors.length; i++) {
             // Use same encoding as _mockf0: protocol byte + uint8 actor ID
-            bytes memory filAddress = abi.encodePacked(uint8(0x00), uint8(knownActors[i]));
+            bytes memory filAddress = knownActors[i].f0();
             (bool exists, uint64 actorId) = filAddress.tryGetActorId();
 
             assertTrue(exists, "Known actor should exist");
@@ -52,8 +42,9 @@ contract ResolveAddressTest is MockFVMTest {
 
     function testConstructorDoesNotMockUnknownActors() public view {
         // Actor IDs 8 and 9 should NOT be mocked
-        bytes memory f0_8 = abi.encodePacked(uint8(0x00), uint8(8));
-        bytes memory f0_9 = abi.encodePacked(uint8(0x00), uint8(9));
+        uint64[2] memory unknownActors = [uint64(8), 9];
+        bytes memory f0_8 = unknownActors[0].f0();
+        bytes memory f0_9 = unknownActors[1].f0();
 
         (bool exists8,) = f0_8.tryGetActorId();
         (bool exists9,) = f0_9.tryGetActorId();
@@ -68,20 +59,21 @@ contract ResolveAddressTest is MockFVMTest {
 
     function testTryGetActorIdExists() public {
         // Mock a Filecoin address (f01234)
-        bytes memory filAddress = f0(1234); // f0 protocol + actor ID 1234
-        uint64 expectedActorId = 1234;
+        uint64 actorIdToMock = 1234;
+        bytes memory filAddress = actorIdToMock.f0(); // f0 protocol + actor ID 1234
 
-        ACTOR_PRECOMPILE.mockResolveAddress(filAddress, expectedActorId);
+        ACTOR_PRECOMPILE.mockResolveAddress(filAddress, actorIdToMock);
 
         (bool exists, uint64 actorId) = filAddress.tryGetActorId();
 
         assertTrue(exists, "Actor should exist");
-        assertEq(actorId, expectedActorId, "Actor ID should match");
+        assertEq(actorId, actorIdToMock, "Actor ID should match");
     }
 
     function testTryGetActorIdDoesNotExists() public {
         // Mock a Filecoin address that doesn't exist
-        bytes memory filAddress = f0(2500);
+        uint64 actorIdToMock = 2500;
+        bytes memory filAddress = actorIdToMock.f0();
 
         // Don't mock it, so it returns 0 (doesn't exist)
         (bool exists, uint64 actorId) = filAddress.tryGetActorId();
@@ -91,17 +83,18 @@ contract ResolveAddressTest is MockFVMTest {
     }
 
     function testGetActorId() public {
-        bytes memory filAddress = f0(1234);
-        uint64 expectedActorId = 1234;
+        uint64 actorIdToMock = 1234;
+        bytes memory filAddress = actorIdToMock.f0();
 
-        ACTOR_PRECOMPILE.mockResolveAddress(filAddress, expectedActorId);
+        ACTOR_PRECOMPILE.mockResolveAddress(filAddress, actorIdToMock);
 
         uint64 actorId = filAddress.getActorId();
-        assertEq(actorId, expectedActorId, "Actor ID should match");
+        assertEq(actorId, actorIdToMock, "Actor ID should match");
     }
 
     function testGetActorIdReverts() public {
-        bytes memory filAddress = f0(2500);
+        uint64 actorIdToMock = 2500;
+        bytes memory filAddress = actorIdToMock.f0();
 
         // Should revert because actor doesn't exist
         vm.expectRevert("FVMActor: actor not found");
@@ -118,7 +111,7 @@ contract ResolveAddressTest is MockFVMTest {
 
     function testTryGetActorIdF410() public {
         // f410 address (delegated address format)
-        bytes memory f410Address = f410(address(0x1234567890123456789012345678901234567890));
+        bytes memory f410Address = address(0x1234567890123456789012345678901234567890).f410();
         uint64 expectedActorId = 9999;
 
         ACTOR_PRECOMPILE.mockResolveAddress(f410Address, expectedActorId);

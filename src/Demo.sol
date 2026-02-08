@@ -4,6 +4,7 @@ pragma solidity ^0.8.30;
 import {FVMPay} from "./FVMPay.sol";
 import {FVMRandom} from "./FVMRandom.sol";
 import {FVMActor} from "./FVMActor.sol";
+import {FVMAddress} from "./FVMAddress.sol";
 
 contract Demo {
     // baseline solidity methods using CALL opcode
@@ -74,5 +75,24 @@ contract Demo {
     /// @notice Get the actor ID for a Solidity address, requiring the actor exists
     function getActorId(address addr) external view returns (uint64 actorId) {
         return addr.getActorId();
+    }
+
+    // address encoding
+    using FVMAddress for uint64;
+    using FVMAddress for address;
+
+    /// @notice Encode an actor ID as an f0 address
+    function toF0(uint64 actorId) external pure returns (bytes memory) {
+        return actorId.f0();
+    }
+
+    /// @notice Encode a Solidity address as an f410 address (EVM namespace)
+    function toF410(address addr) external pure returns (bytes memory) {
+        return addr.f410();
+    }
+
+    /// @notice Encode a subaddress as an f410 address with a given namespace
+    function toF410(uint8 namespace, bytes20 subaddress) external pure returns (bytes memory) {
+        return FVMAddress.f410(namespace, subaddress);
     }
 }

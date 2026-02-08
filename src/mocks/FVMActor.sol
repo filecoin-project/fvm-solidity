@@ -13,8 +13,10 @@ import {
     EAM_ACTOR_ID,
     BURN_ACTOR_ID
 } from "../FVMActors.sol";
+import {FVMAddress} from "../FVMAddress.sol";
 
 contract FVMActor {
+    using FVMAddress for uint64;
     // Mapping from Filecoin address bytes to actor ID
     mapping(bytes32 => uint64) public addressMocks;
 
@@ -41,7 +43,7 @@ contract FVMActor {
      */
     function _mockf0(uint64 actorId) internal {
         // Protocol 0 address = protocol byte (0x00) + actor ID
-        bytes memory filAddress = abi.encodePacked(uint8(0x00), uint8(actorId));
+        bytes memory filAddress = actorId.f0();
         addressMocks[keccak256(filAddress)] = actorId;
     }
 
