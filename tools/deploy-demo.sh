@@ -33,13 +33,34 @@ if [ -z "$DEPLOYED_ADDRESS" ]; then
 fi
 
 echo "Deployed at: $DEPLOYED_ADDRESS"
-echo "Verifying on Sourcify (chain $CHAIN_ID)..."
 
-# Verify on Sourcify
-forge verify-contract \
-  "$DEPLOYED_ADDRESS" \
-  "$CONTRACT" \
-  --chain-id "$CHAIN_ID" \
-  --verifier sourcify
+# Sanity check 
+echo "Sanity-checking deployed bytecode..."
+
+[ "$(cast code "$DEPLOYED_ADDRESS")" = "$(forge inspect "$CONTRACT" deployedBytecode)" ] || {
+  echo "On-chain bytecode does not match local build"
+  exit 1
+}
+
+echo "Verifying contract (chain $CHAIN_ID)..."
+
+for verifier in sourcify blockscout; do
+  if [ "$verifier" = "blockscout" ]; then
+    forge verify-contract \
+      "$DEPLOYED_ADDRESS" \
+      "$CONTRACT" \
+      --chain-id "$CHAIN_ID" \
+      --verifier blockscout \
+      --verifier-url https://filecoin-testnet.blockscout.com/api || \
+      echo "Blockscout verification failed (continuing)"
+  else
+    forge verify-contract \
+      "$DEPLOYED_ADDRESS" \
+      "$CONTRACT" \
+      --chain-id "$CHAIN_ID" \
+      --verifier "$verifier"
+  fi
+done
+
 
 echo "Verification submitted for $DEPLOYED_ADDRESS"
