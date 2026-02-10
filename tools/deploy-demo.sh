@@ -32,8 +32,6 @@ if [ -z "$DEPLOYED_ADDRESS" ]; then
   exit 1
 fi
 
-echo "Deployed at: $DEPLOYED_ADDRESS"
-
 # Sanity check 
 echo "Sanity-checking deployed bytecode..."
 
