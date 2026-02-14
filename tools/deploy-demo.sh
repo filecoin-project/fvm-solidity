@@ -40,18 +40,26 @@ echo "Sanity-checking deployed bytecode..."
 }
 
 for verifier in sourcify blockscout; do
+  EXTRA_ARGS=()
+
   if [ "$verifier" = "blockscout" ]; then
-    forge verify-contract \
-      "$DEPLOYED_ADDRESS" \
-      "$CONTRACT" \
-      --verifier blockscout \
-      --verifier-url https://filecoin-testnet.blockscout.com/api || \
+    EXTRA_ARGS+=(--verifier-url https://filecoin-testnet.blockscout.com/api)
+  fi
+
+  echo "Verifying with $verifier..."
+
+  if ! forge verify-contract \
+    "$DEPLOYED_ADDRESS" \
+    "$CONTRACT" \
+    --verifier "$verifier" \
+     ${EXTRA_ARGS:+${EXTRA_ARGS[@]}}; then
+
+    if [ "$verifier" = "blockscout" ]; then
       echo "Blockscout verification failed (continuing)"
-  else
-    forge verify-contract \
-      "$DEPLOYED_ADDRESS" \
-      "$CONTRACT" \
-      --verifier "$verifier"
+    else
+      echo "Sourcify verification failed"
+      exit 1
+    fi
   fi
 done
 
