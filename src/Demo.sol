@@ -92,7 +92,7 @@ contract Demo {
     }
 
     /// @notice Encode a subaddress as an f410 address with a given namespace
-    function toF410(uint8 namespace, bytes20 subaddress) external pure returns (bytes memory) {
-        return FVMAddress.f410(namespace, subaddress);
+    function toF4(uint8 namespace, bytes20 subaddress) external pure returns (bytes memory) {
+        return FVMAddress.f4(namespace, subaddress);
     }
 }

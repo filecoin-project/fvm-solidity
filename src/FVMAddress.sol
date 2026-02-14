@@ -24,13 +24,14 @@ library FVMAddress {
         }
     }
 
-    /// @notice Creates an f410 (delegated) address in bytes
-    function f410(uint8 namespace, bytes20 subaddress) internal pure returns (bytes memory) {
+    /// @notice Creates an f4 (delegated) address in bytes
+    /// @dev NOTE: Only supports namespaces < 128 (single byte varint).
+    function f4(uint8 namespace, bytes20 subaddress) internal pure returns (bytes memory) {
         return abi.encodePacked(uint8(0x04), namespace, subaddress);
     }
 
     /// @notice Creates an f410 address for a Solidity address
     function f410(address addr) internal pure returns (bytes memory) {
-        return f410(0x0a, bytes20(addr));
+        return f4(0x0a, bytes20(addr));
     }
 }
