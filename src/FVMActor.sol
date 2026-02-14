@@ -2,8 +2,11 @@
 pragma solidity ^0.8.30;
 
 import {RESOLVE_ADDRESS} from "./FVMPrecompiles.sol";
+import {FVMAddress} from "./FVMAddress.sol";
 
 library FVMActor {
+    error ActorNotFound(bytes filAddress);
+
     // =============================================================
     //                    BYTES IMPLEMENTATION
     // =============================================================
@@ -47,7 +50,7 @@ library FVMActor {
     function getActorId(bytes memory filAddress) internal view returns (uint64 actorId) {
         bool exists;
         (exists, actorId) = tryGetActorId(filAddress);
-        require(exists, "FVMActor: actor not found");
+        if (!exists) revert ActorNotFound(filAddress);
     }
 
     // =============================================================
@@ -83,6 +86,6 @@ library FVMActor {
     function getActorId(address addr) internal view returns (uint64 actorId) {
         bool exists;
         (exists, actorId) = tryGetActorId(addr);
-        require(exists, "FVMActor: actor not found");
+        if (!exists) revert ActorNotFound(FVMAddress.f410(addr));
     }
 }

@@ -97,7 +97,7 @@ contract ResolveAddressTest is MockFVMTest {
         bytes memory filAddress = actorIdToMock.f0();
 
         // Should revert because actor doesn't exist
-        vm.expectRevert("FVMActor: actor not found");
+        vm.expectRevert(abi.encodeWithSelector(FVMActor.ActorNotFound.selector, filAddress));
         this._getActorIdBytes(filAddress);
     }
 
@@ -160,7 +160,7 @@ contract ResolveAddressTest is MockFVMTest {
     function testGetActorIdAddressReverts() public {
         address addr = address(0xdead);
 
-        vm.expectRevert("FVMActor: actor not found");
+        vm.expectRevert(abi.encodeWithSelector(FVMActor.ActorNotFound.selector, addr.f410()));
         this._getActorIdAddress(addr);
     }
 }
