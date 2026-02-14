@@ -3,6 +3,7 @@ pragma solidity ^0.8.30;
 
 import {FVMPay} from "./FVMPay.sol";
 import {FVMRandom} from "./FVMRandom.sol";
+import {FVMLookupDelegatedAddress} from "./FVMLookupDelegatedAddress.sol";
 
 contract Demo {
     // baseline solidity methods using CALL opcode
@@ -49,5 +50,21 @@ contract Demo {
 
     function next() external view returns (uint256 randomness) {
         randomness = (block.number + 1).getBeaconRandomness();
+    }
+
+    // resolve address
+    using FVMLookupDelegatedAddress for uint64;
+    using FVMLookupDelegatedAddress for bytes;
+
+    /// @notice Lookup the delegated address of an actor ID
+    function lookup(uint64 actorId) external view returns (bytes memory delegatedAddress) {
+        delegatedAddress = actorId.lookupDelegatedAddress();
+    }
+
+    /// @notice Get the Ethereum-style address of an actor ID
+    /// @dev Combines lookup and conversion
+    function getEthAddress(uint64 actorId) external view returns (address ethAddress) {
+        bytes memory delegated = actorId.lookupDelegatedAddressStrict();
+        ethAddress = delegated.toEthAddress();
     }
 }
