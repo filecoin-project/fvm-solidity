@@ -10,7 +10,6 @@ fi
 
 : "${PRIVATE_KEY:?PRIVATE_KEY not set}"
 : "${ETH_RPC_URL:?ETH_RPC_URL not set}"
-: "${CHAIN_ID:?CHAIN_ID not set}"
 
 CONTRACT="src/Demo.sol:Demo"
 
@@ -40,14 +39,11 @@ echo "Sanity-checking deployed bytecode..."
   exit 1
 }
 
-echo "Verifying contract (chain $CHAIN_ID)..."
-
 for verifier in sourcify blockscout; do
   if [ "$verifier" = "blockscout" ]; then
     forge verify-contract \
       "$DEPLOYED_ADDRESS" \
       "$CONTRACT" \
-      --chain-id "$CHAIN_ID" \
       --verifier blockscout \
       --verifier-url https://filecoin-testnet.blockscout.com/api || \
       echo "Blockscout verification failed (continuing)"
@@ -55,7 +51,6 @@ for verifier in sourcify blockscout; do
     forge verify-contract \
       "$DEPLOYED_ADDRESS" \
       "$CONTRACT" \
-      --chain-id "$CHAIN_ID" \
       --verifier "$verifier"
   fi
 done
