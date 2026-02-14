@@ -7,3 +7,6 @@ out
 
 # VIM
 *.swp
+
+# environment variables
+.env
