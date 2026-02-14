@@ -8,5 +8,5 @@ out
 # VIM
 *.swp
 
-# envirenment variables
+# environment variables
 .env
