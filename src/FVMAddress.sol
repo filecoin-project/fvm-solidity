@@ -9,16 +9,15 @@ library FVMAddress {
         buffer[0] = 0x00; // Protocol byte for f0
 
         uint256 i = 1;
-        uint64 value = actorId;
 
         do {
-            uint8 byteVal = uint8(value & 0x7F); // Take 7 bits
-            value >>= 7; // Shift right by 7 bits
-            if (value != 0) {
+            uint8 byteVal = uint8(actorId & 0x7F); // Take 7 bits
+            actorId >>= 7; // Shift right by 7 bits
+            if (actorId != 0) {
                 byteVal |= 0x80; // Set MSB if more bytes follow
             }
             buffer[i++] = bytes1(byteVal);
-        } while (value != 0);
+        } while (actorId != 0);
 
         assembly ("memory-safe") {
             mstore(buffer, i) // Set the correct length of the bytes array
