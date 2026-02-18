@@ -43,11 +43,11 @@ contract ResolveAddressTest is MockFVMTest {
     function testConstructorDoesNotMockUnknownActors() public view {
         // Actor IDs 8 and 9 should NOT be mocked
         uint64[2] memory unknownActors = [uint64(8), 9];
-        bytes memory f0_8 = unknownActors[0].f0();
-        bytes memory f0_9 = unknownActors[1].f0();
+        bytes memory f0Actor8 = unknownActors[0].f0();
+        bytes memory f0Actor9 = unknownActors[1].f0();
 
-        (bool exists8,) = f0_8.tryGetActorId();
-        (bool exists9,) = f0_9.tryGetActorId();
+        (bool exists8,) = f0Actor8.tryGetActorId();
+        (bool exists9,) = f0Actor9.tryGetActorId();
 
         assertFalse(exists8, "Actor 8 should not exist");
         assertFalse(exists9, "Actor 9 should not exist");
