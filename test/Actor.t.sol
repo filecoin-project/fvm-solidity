@@ -160,7 +160,7 @@ contract ResolveAddressTest is MockFVMTest {
     function testGetActorIdAddressReverts() public {
         address addr = address(0xdead);
 
-        vm.expectRevert(abi.encodeWithSelector(FVMActor.ActorNotFound.selector, addr.f410()));
+        vm.expectRevert(abi.encodeWithSelector(FVMActor.EVMActorNotFound.selector, addr));
         this._getActorIdAddress(addr);
     }
 }

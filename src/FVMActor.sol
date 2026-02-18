@@ -6,6 +6,7 @@ import {FVMAddress} from "./FVMAddress.sol";
 
 library FVMActor {
     error ActorNotFound(bytes filAddress);
+    error EVMActorNotFound(address addr);
 
     // =============================================================
     //                    BYTES IMPLEMENTATION
@@ -86,6 +87,6 @@ library FVMActor {
     function getActorId(address addr) internal view returns (uint64 actorId) {
         bool exists;
         (exists, actorId) = tryGetActorId(addr);
-        if (!exists) revert ActorNotFound(FVMAddress.f410(addr));
+        if (!exists) revert EVMActorNotFound(addr);
     }
 }

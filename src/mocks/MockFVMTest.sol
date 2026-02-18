@@ -18,7 +18,7 @@ contract MockFVMTest is Test {
         vm.etch(CALL_ACTOR_BY_ADDRESS, address(new FVMCallActorByAddress()).code);
         vm.etch(CALL_ACTOR_BY_ID, address(new FVMCallActorById()).code);
         vm.etch(GET_BEACON_RANDOMNESS, address(new FVMGetBeaconRandomness()).code);
-        
+
         address deployed = address(new FVMActor());
         vm.etch(RESOLVE_ADDRESS, deployed.code);
         vm.copyStorage(deployed, RESOLVE_ADDRESS);
