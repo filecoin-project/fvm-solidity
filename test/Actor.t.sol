@@ -70,7 +70,7 @@ contract ResolveAddressTest is MockFVMTest {
         assertEq(actorId, actorIdToMock, "Actor ID should match");
     }
 
-    function testTryGetActorIdDoesNotExists() public {
+    function testTryGetActorIdDoesNotExists() public view {
         // Mock a Filecoin address that doesn't exist
         uint64 actorIdToMock = 2500;
         bytes memory filAddress = actorIdToMock.f0();
@@ -138,7 +138,7 @@ contract ResolveAddressTest is MockFVMTest {
         assertEq(actorId, expectedActorId, "Actor ID should match");
     }
 
-    function testTryGetActorIdAddressDoesNotExist() public {
+    function testTryGetActorIdAddressDoesNotExist() public view {
         address addr = address(0xdead);
 
         (bool exists, uint64 actorId) = addr.tryGetActorId();
@@ -210,7 +210,7 @@ contract ResolveAddressTest is MockFVMTest {
         assertEq(actorId, expectedActorId, "Actor ID should be 1234");
     }
 
-    function testMaskedIdAddressDoesNotExist() public {
+    function testMaskedIdAddressDoesNotExist() public view {
         // Masked ID for non-existent actor
         address maskedAddr = address(bytes20(abi.encodePacked(hex"ff", bytes11(0), uint64(0x9999))));
 
