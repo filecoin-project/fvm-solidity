@@ -163,4 +163,82 @@ contract ResolveAddressTest is MockFVMTest {
         vm.expectRevert(abi.encodeWithSelector(FVMActor.EVMActorNotFound.selector, addr));
         this._getActorIdAddress(addr);
     }
+
+    // =============================================================
+    //                  MASKED ID ADDRESS TESTS
+    // =============================================================
+
+    function testMaskedIdAddressBurnActor() public {
+        // Burn actor: f099 -> 0xff + 11 zeros + actor ID
+        uint64 expectedActorId = 99;
+        address maskedBurnActor = address(bytes20(abi.encodePacked(hex"ff", bytes11(0), expectedActorId)));
+
+        // Mock the f0 address for actor 99
+        ACTOR_PRECOMPILE.mockResolveAddress(expectedActorId.f0(), expectedActorId);
+
+        (bool exists, uint64 actorId) = maskedBurnActor.tryGetActorId();
+
+        assertTrue(exists, "Burn actor should exist");
+        assertEq(actorId, expectedActorId, "Actor ID should be 99");
+    }
+
+    function testMaskedIdAddressSystemActor() public {
+        // System actor: f00 -> 0xff + 11 zeros + actor ID
+        uint64 expectedActorId = 0;
+        address maskedSystemActor = address(bytes20(abi.encodePacked(hex"ff", bytes11(0), expectedActorId)));
+
+        // Mock the f0 address for actor 0
+        ACTOR_PRECOMPILE.mockResolveAddress(expectedActorId.f0(), expectedActorId);
+
+        (bool exists, uint64 actorId) = maskedSystemActor.tryGetActorId();
+
+        assertTrue(exists, "System actor should exist");
+        assertEq(actorId, expectedActorId, "Actor ID should be 0");
+    }
+
+    function testMaskedIdAddressArbitraryId() public {
+        // Arbitrary actor: f01234 -> 0xff + 11 zeros + actor ID
+        uint64 expectedActorId = 1234;
+        address maskedAddr = address(bytes20(abi.encodePacked(hex"ff", bytes11(0), expectedActorId)));
+
+        // Mock the f0 address for actor 1234
+        ACTOR_PRECOMPILE.mockResolveAddress(expectedActorId.f0(), expectedActorId);
+
+        (bool exists, uint64 actorId) = maskedAddr.tryGetActorId();
+
+        assertTrue(exists, "Actor 1234 should exist");
+        assertEq(actorId, expectedActorId, "Actor ID should be 1234");
+    }
+
+    function testMaskedIdAddressDoesNotExist() public {
+        // Masked ID for non-existent actor
+        address maskedAddr = address(bytes20(abi.encodePacked(hex"ff", bytes11(0), uint64(0x9999))));
+
+        (bool exists, uint64 actorId) = maskedAddr.tryGetActorId();
+
+        assertFalse(exists, "Non-existent masked ID actor should not exist");
+        assertEq(actorId, 0, "Actor ID should be 0");
+    }
+
+    function testMaskedIdAddressGetActorIdReverts() public {
+        // Masked ID for non-existent actor
+        address maskedAddr = address(bytes20(abi.encodePacked(hex"ff", bytes11(0), uint64(0x9999))));
+
+        vm.expectRevert(abi.encodeWithSelector(FVMActor.EVMActorNotFound.selector, maskedAddr));
+        this._getActorIdAddress(maskedAddr);
+    }
+
+    function testNonMaskedIdAddressStillUsesF410() public {
+        // Regular address (not 0xff-prefixed) should use f410 path
+        address regularAddr = address(0x1234567890123456789012345678901234567890);
+        uint64 expectedActorId = 5678;
+
+        // Mock as f410, not f0
+        ACTOR_PRECOMPILE.mockResolveAddress(regularAddr, expectedActorId);
+
+        (bool exists, uint64 actorId) = regularAddr.tryGetActorId();
+
+        assertTrue(exists, "Regular address should resolve via f410");
+        assertEq(actorId, expectedActorId, "Actor ID should match");
+    }
 }

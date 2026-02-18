@@ -8,6 +8,9 @@ library FVMActor {
     error ActorNotFound(bytes filAddress);
     error EVMActorNotFound(address addr);
 
+    /// @dev Prefix for masked ID addresses: 0xff followed by 11 zero bytes (top 96 bits of address)
+    uint160 private constant MASKED_ID_PREFIX = 0xff0000000000000000000000;
+
     // =============================================================
     //                    BYTES IMPLEMENTATION
     // =============================================================
@@ -59,8 +62,16 @@ library FVMActor {
     // =============================================================
 
     /// @notice Attempts to resolve a Solidity address to an actor ID
-    /// @dev Converts address to f410 in scratch memory (no allocation).
+    /// @dev Handles both f410 (delegated) and masked ID addresses (0xff + 11 zeros + 8-byte actor ID).
     function tryGetActorId(address addr) internal view returns (bool exists, uint64 actorId) {
+        uint160 addrInt = uint160(addr);
+
+        // Check for masked ID address: 0xff + 11 zero bytes + 8-byte actor ID
+        if (addrInt >> 64 == MASKED_ID_PREFIX) {
+            return tryGetActorId(FVMAddress.f0(uint64(addrInt)));
+        }
+
+        // f410 path: Converts address to f410 in scratch memory (no allocation)
         assembly ("memory-safe") {
             mstore8(0x00, 0x04) // f410 protocol
             mstore8(0x01, 0x0a) // EVM namespace (0x0a)

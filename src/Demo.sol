@@ -77,6 +77,15 @@ contract Demo {
         return addr.getActorId();
     }
 
+    /// @notice Demo: Resolve a masked ID address (0xff prefix format)
+    /// @dev Shows that masked ID addresses (e.g., 0xff...0063 for f099) can be resolved
+    function tryGetActorIdFromMaskedId(uint64 actorId) external view returns (bool exists, uint64 resolved) {
+        // Construct a masked ID address: 0xff + 11 zeros + 8-byte actor ID
+        address maskedAddr = address(bytes20(abi.encodePacked(hex"ff", bytes11(0), actorId)));
+        // Resolve it - this demonstrates masked ID support in tryGetActorId(address)
+        return maskedAddr.tryGetActorId();
+    }
+
     // address encoding
     using FVMAddress for uint64;
     using FVMAddress for address;
@@ -91,7 +100,7 @@ contract Demo {
         return addr.f410();
     }
 
-    /// @notice Encode a subaddress as an f410 address with a given namespace
+    /// @notice Encode a subaddress as an f4 address with a given namespace
     function toF4(uint8 namespace, bytes20 subaddress) external pure returns (bytes memory) {
         return FVMAddress.f4(namespace, subaddress);
     }
