@@ -77,8 +77,15 @@ contract FVMActor {
         uint8 protocol = uint8(filAddress[0]);
         require(protocol <= 0x04, "Invalid address: unknown protocol");
 
+        bytes32 key;
+        // Equivalent to `keccak256(filAddress)`.
+        // Hash the data section of `bytes memory` directly:
+        // length at offset 0x00, data at 0x20.
+        assembly {
+            key := keccak256(add(filAddress, 0x20), mload(filAddress))
+        }
+
         // Look up mocked actor ID
-        bytes32 key = keccak256(filAddress);
         uint64 actorId = addressMocks[key];
 
         // If actor exists (actorId > 0), return it as ABI-encoded uint64
