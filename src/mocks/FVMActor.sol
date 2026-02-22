@@ -99,7 +99,7 @@ contract FVMActor {
 
         // If actor doesn't exist (actorId == 0), return empty
         assembly ("memory-safe") {
-            return(0, 0)
+            stop()
         }
     }
 }
