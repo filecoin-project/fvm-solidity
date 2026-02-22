@@ -97,6 +97,6 @@ library FVMActor {
     function getActorId(address addr) internal view returns (uint64 actorId) {
         bool exists;
         (exists, actorId) = tryGetActorId(addr);
-        if (!exists) revert EVMActorNotFound(addr);
+        require(exists, EVMActorNotFound(addr));
     }
 }
