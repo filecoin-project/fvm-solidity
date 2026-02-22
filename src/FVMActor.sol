@@ -73,14 +73,13 @@ library FVMActor {
 
         // f410 path: Converts address to f410 in scratch memory (no allocation)
         assembly ("memory-safe") {
-            mstore8(0x00, 0x04) // f410 protocol
-            mstore8(0x01, 0x0a) // EVM namespace (0x0a)
-            mstore(0x02, shl(96, addr)) // Address bytes
+            mstore(20, addr) // Address bytes at [32,52)
+            mstore(0x00, 0x040a) // f410 protocol, EVM namespace (0x0a)
 
             // Call Precompile (RESOLVE_ADDRESS)
-            // Input: scratch 0x00, length 22
+            // Input: scratch [30,52)
             // Output: scratch 0x00, length 32 (reuse scratch space)
-            let success := staticcall(gas(), RESOLVE_ADDRESS, 0x00, 22, 0x00, 32)
+            let success := staticcall(gas(), RESOLVE_ADDRESS, 30, 22, 0x00, 32)
 
             if iszero(success) {
                 returndatacopy(0, 0, returndatasize())
