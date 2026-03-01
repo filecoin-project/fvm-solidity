@@ -8,8 +8,10 @@ import {FVMAddress} from "../src/FVMAddress.sol";
 contract ResolveAddressTest is MockFVMTest {
     using FVMActor for bytes;
     using FVMActor for address;
+    using FVMActor for uint64;
     using FVMAddress for uint64;
     using FVMAddress for address;
+    using FVMAddress for bytes;
 
     // Helper function to wrap the library call
     function _getActorIdBytes(bytes memory filAddress) public view returns (uint64) {
@@ -18,6 +20,10 @@ contract ResolveAddressTest is MockFVMTest {
 
     function _getActorIdAddress(address addr) public view returns (uint64) {
         return addr.getActorId();
+    }
+
+    function _lookupDelegatedAddressStrict(uint64 actorId) public view returns (bytes memory) {
+        return actorId.lookupDelegatedAddress();
     }
 
     // =============================================================
@@ -240,5 +246,165 @@ contract ResolveAddressTest is MockFVMTest {
 
         assertTrue(exists, "Regular address should resolve via f410");
         assertEq(actorId, expectedActorId, "Actor ID should match");
+    }
+
+    // =============================================================
+    //                  DELEGATED ADDRESS TESTS
+    // =============================================================
+
+    function testTryLookupDelegatedAddressExists() public {
+        uint64 actorId = 1234;
+        bytes memory expected = abi.encodePacked(uint8(0x04), uint8(0x0a), address(1));
+
+        LOOKUP_DELEGATED_ADDRESS_PRECOMPILE.mockLookupDelegatedAddress(actorId, expected);
+
+        (bool exists, bytes memory result) = actorId.tryLookupDelegatedAddress();
+
+        assertTrue(exists, "Actor should have a delegated address");
+        assertEq(result, expected, "Delegated address should match");
+    }
+
+    function testTryLookupDelegatedAddressDoesNotExist() public view {
+        uint64 actorId = 9999;
+        // No mock set — precompile returns empty
+
+        (bool exists, bytes memory result) = actorId.tryLookupDelegatedAddress();
+
+        assertFalse(exists, "Actor should have no delegated address");
+        assertEq(result.length, 0, "Should return empty bytes");
+    }
+
+    function testLookupDelegatedAddressExists() public {
+        uint64 actorId = 42;
+        bytes memory expected = abi.encodePacked(uint8(0x04), uint8(0x0a), address(1));
+
+        LOOKUP_DELEGATED_ADDRESS_PRECOMPILE.mockLookupDelegatedAddress(actorId, expected);
+
+        bytes memory result = actorId.lookupDelegatedAddress();
+        assertEq(result, expected, "Strict lookup should return delegated address");
+    }
+
+    function testLookupDelegatedAddressReverts() public {
+        uint64 actorId = 9999;
+
+        vm.expectRevert(abi.encodeWithSelector(FVMActor.DelegatedAddressNotFound.selector, actorId));
+        this._lookupDelegatedAddressStrict(actorId);
+    }
+
+    function testLookupDelegatedAddressActorIdZero() public {
+        uint64 actorId = 0;
+        bytes memory expected = abi.encodePacked(uint8(0x04), uint8(0x0a), address(1));
+
+        LOOKUP_DELEGATED_ADDRESS_PRECOMPILE.mockLookupDelegatedAddress(actorId, expected);
+
+        (bool exists, bytes memory result) = actorId.tryLookupDelegatedAddress();
+        assertTrue(exists, "Actor ID 0 should work");
+        assertEq(result, expected, "Delegated address should match for actor ID 0");
+    }
+
+    function testLookupDelegatedAddressActorIdMaxUint64() public {
+        uint64 actorId = type(uint64).max;
+        bytes memory expected = abi.encodePacked(uint8(0x04), uint8(0x0a), address(2));
+
+        LOOKUP_DELEGATED_ADDRESS_PRECOMPILE.mockLookupDelegatedAddress(actorId, expected);
+
+        (bool exists, bytes memory result) = actorId.tryLookupDelegatedAddress();
+        assertTrue(exists, "Max uint64 actor ID should work");
+        assertEq(result, expected, "Delegated address should match for max uint64 actor ID");
+    }
+
+    function testPrecompileRevertOnLargeId() public {
+        // An ID that exceeds u64 should cause the precompile to revert
+        uint256 hugeId = uint256(type(uint64).max) + 1;
+
+        (bool success,) = address(LOOKUP_DELEGATED_ADDRESS_PRECOMPILE).staticcall(abi.encode(hugeId));
+        assertFalse(success, "Precompile should revert on ID > u64");
+    }
+
+    function testMockLookupDelegatedAddressUsingAddress() public {
+        uint64 actorId = 100;
+        address ethAddr = address(1);
+
+        LOOKUP_DELEGATED_ADDRESS_PRECOMPILE.mockLookupDelegatedAddress(actorId, ethAddr);
+
+        (bool exists, bytes memory result) = actorId.tryLookupDelegatedAddress();
+        bytes memory expected = abi.encodePacked(uint8(0x04), uint8(0x0a), ethAddr);
+
+        assertTrue(exists, "Actor should have a delegated address");
+        assertEq(result, expected, "Delegated address bytes should match f410 encoding");
+    }
+
+    function testLookupDelegatedAddressStrictUsingAddress() public {
+        uint64 actorId = 100;
+        address ethAddr = address(1);
+
+        LOOKUP_DELEGATED_ADDRESS_PRECOMPILE.mockLookupDelegatedAddress(actorId, ethAddr);
+
+        bytes memory result = actorId.lookupDelegatedAddress();
+        bytes memory expected = abi.encodePacked(uint8(0x04), uint8(0x0a), ethAddr);
+
+        assertEq(result, expected, "Strict lookup via address mock should match f410 encoding");
+    }
+
+    function testFuzzTryLookupDelegatedAddress(uint64 actorId, address ethAddr) public {
+        bytes memory expected = abi.encodePacked(uint8(0x04), uint8(0x0a), ethAddr);
+
+        LOOKUP_DELEGATED_ADDRESS_PRECOMPILE.mockLookupDelegatedAddress(actorId, expected);
+
+        (bool exists, bytes memory result) = actorId.tryLookupDelegatedAddress();
+        assertTrue(exists, "Actor should exist");
+        assertEq(result, expected, "Fuzzed delegated address should match");
+    }
+
+    // =============================================================
+    //                     LIFECYCLE TESTS
+    // =============================================================
+
+    function testLifecycleEthAddressToActorIdToDelegatedAddress() public {
+        // Simulate: ETH address -> actor ID -> delegated address -> back to ETH address
+        address ethAddr = address(0x1234567890123456789012345678901234567890);
+        uint64 actorId = 1234;
+
+        ACTOR_PRECOMPILE.mockResolveAddress(ethAddr, actorId);
+        LOOKUP_DELEGATED_ADDRESS_PRECOMPILE.mockLookupDelegatedAddress(actorId, ethAddr);
+
+        uint64 resolvedId = ethAddr.getActorId();
+        address recovered = resolvedId.lookupDelegatedAddress().toEthAddress();
+
+        assertEq(resolvedId, actorId, "Actor ID should match");
+        assertEq(recovered, ethAddr, "Recovered ETH address should match original");
+    }
+
+    function testLifecycleF410AddressToActorIdToDelegatedAddress() public {
+        // Simulate: f410 bytes address -> actor ID -> delegated address -> back to ETH address
+        address ethAddr = address(0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF);
+        uint64 actorId = 5678;
+        bytes memory f410Addr = ethAddr.f410();
+
+        ACTOR_PRECOMPILE.mockResolveAddress(f410Addr, actorId);
+        LOOKUP_DELEGATED_ADDRESS_PRECOMPILE.mockLookupDelegatedAddress(actorId, ethAddr);
+
+        uint64 resolvedId = f410Addr.getActorId();
+        address recovered = resolvedId.lookupDelegatedAddress().toEthAddress();
+
+        assertEq(resolvedId, actorId, "Actor ID should match");
+        assertEq(recovered, ethAddr, "Recovered ETH address should match original");
+    }
+
+    function testFuzzLifecycle(uint64 actorId, address ethAddr) public {
+        // actorId == 0 is the mock sentinel for "not found".
+        // Note: Pre-seeded system actors (IDs 1-7, etc.) do not conflict here
+        // because their constructor mocks are keyed by f0 encoding,
+        // whereas the mockResolveAddress below keys by f410 encoding.
+        vm.assume(actorId != 0);
+
+        ACTOR_PRECOMPILE.mockResolveAddress(ethAddr, actorId);
+        LOOKUP_DELEGATED_ADDRESS_PRECOMPILE.mockLookupDelegatedAddress(actorId, ethAddr);
+
+        uint64 resolvedId = ethAddr.getActorId();
+        address recovered = resolvedId.lookupDelegatedAddress().toEthAddress();
+
+        assertEq(resolvedId, actorId);
+        assertEq(recovered, ethAddr);
     }
 }
