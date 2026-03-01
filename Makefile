@@ -8,3 +8,6 @@ clean:
 
 test:
 	forge test
+
+deploy-demo:
+	./tools/deploy-demo.sh
