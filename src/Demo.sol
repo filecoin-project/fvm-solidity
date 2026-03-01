@@ -86,9 +86,27 @@ contract Demo {
         return maskedAddr.tryGetActorId();
     }
 
+    // delegated address lookup
+    using FVMActor for uint64;
+
+    /// @notice Try to look up the delegated address of an actor by ID
+    function tryLookupDelegatedAddress(uint64 actorId)
+        external
+        view
+        returns (bool exists, bytes memory delegatedAddress)
+    {
+        return actorId.tryLookupDelegatedAddress();
+    }
+
+    /// @notice Look up the delegated address of an actor, requiring it exists
+    function lookupDelegatedAddress(uint64 actorId) external view returns (bytes memory delegatedAddress) {
+        return actorId.lookupDelegatedAddress();
+    }
+
     // address encoding
     using FVMAddress for uint64;
     using FVMAddress for address;
+    using FVMAddress for bytes;
 
     /// @notice Encode an actor ID as an f0 address
     function toF0(uint64 actorId) external pure returns (bytes memory) {
@@ -103,5 +121,10 @@ contract Demo {
     /// @notice Encode a subaddress as an f4 address with a given namespace
     function toF4(uint8 namespace, bytes20 subaddress) external pure returns (bytes memory) {
         return FVMAddress.f4(namespace, subaddress);
+    }
+
+    /// @notice Extract the Ethereum address from a delegated (f410) address
+    function toEthAddress(bytes calldata delegatedAddress) external pure returns (address) {
+        return delegatedAddress.toEthAddress();
     }
 }
