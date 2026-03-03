@@ -14,6 +14,7 @@ import {
     BURN_ACTOR_ID
 } from "../FVMActors.sol";
 import {FVMAddress} from "../FVMAddress.sol";
+import {RESOLVE_ADDRESS, LOOKUP_DELEGATED_ADDRESS} from "../FVMPrecompiles.sol";
 
 contract FVMActor {
     using FVMAddress for uint64;
@@ -88,7 +89,7 @@ contract FVMActor {
 
     fallback() external {
         uint64 actorId;
-        if (msg.data.length == 32) {
+        if (address(this) == LOOKUP_DELEGATED_ADDRESS) {
             // ---- lookupDelegatedAddress ----
             // Decode the actor ID from the input
             uint256 actorIdFull = abi.decode(msg.data, (uint256));
@@ -106,42 +107,42 @@ contract FVMActor {
             assembly ("memory-safe") {
                 return(add(delegatedAddress, 0x20), mload(delegatedAddress))
             }
-        }
+        } else if (address(this) == RESOLVE_ADDRESS) {
+            // ---- resolveAddress ----
+            bytes memory filAddress = msg.data;
 
-        // ---- resolveAddress ----
-        bytes memory filAddress = msg.data;
+            // Basic validation:  address must be non-empty
+            require(filAddress.length > 0, "Invalid address:  empty");
 
-        // Basic validation:  address must be non-empty
-        require(filAddress.length > 0, "Invalid address:  empty");
+            // Check first byte for valid protocol
+            // f0 = 0x00, f1 = 0x01, f2 = 0x02, f3 = 0x03, f4 = 0x04
+            uint8 protocol = uint8(filAddress[0]);
+            require(protocol <= 0x04, "Invalid address: unknown protocol");
 
-        // Check first byte for valid protocol
-        // f0 = 0x00, f1 = 0x01, f2 = 0x02, f3 = 0x03, f4 = 0x04
-        uint8 protocol = uint8(filAddress[0]);
-        require(protocol <= 0x04, "Invalid address: unknown protocol");
-
-        bytes32 key;
-        // Equivalent to `keccak256(filAddress)`.
-        // Hash the data section of `bytes memory` directly:
-        // length at offset 0x00, data at 0x20.
-        assembly {
-            key := keccak256(add(filAddress, 0x20), mload(filAddress))
-        }
-
-        // Look up mocked actor ID
-        actorId = addressMocks[key];
-
-        // If actor exists (actorId > 0), return it as ABI-encoded uint64
-        // Special case: SYSTEM_ACTOR_ID is 0, but we want to allow it to be mocked and returned
-        if (actorId > 0 || key == SYSTEM_ACTOR_HASH) {
-            bytes memory response = abi.encode(uint256(actorId));
-            assembly ("memory-safe") {
-                return(add(response, 0x20), 32)
+            bytes32 key;
+            // Equivalent to `keccak256(filAddress)`.
+            // Hash the data section of `bytes memory` directly:
+            // length at offset 0x00, data at 0x20.
+            assembly {
+                key := keccak256(add(filAddress, 0x20), mload(filAddress))
             }
-        }
 
-        // If actor doesn't exist (actorId == 0), return empty
-        assembly ("memory-safe") {
-            stop()
+            // Look up mocked actor ID
+            actorId = addressMocks[key];
+
+            // If actor exists (actorId > 0), return it as ABI-encoded uint64
+            // Special case: SYSTEM_ACTOR_ID is 0, but we want to allow it to be mocked and returned
+            if (actorId > 0 || key == SYSTEM_ACTOR_HASH) {
+                bytes memory response = abi.encode(uint256(actorId));
+                assembly ("memory-safe") {
+                    return(add(response, 0x20), 32)
+                }
+            }
+
+            // If actor doesn't exist (actorId == 0), return empty
+            assembly ("memory-safe") {
+                stop()
+            }
         }
     }
 }

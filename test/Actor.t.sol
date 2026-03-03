@@ -3,6 +3,7 @@ pragma solidity ^0.8.30;
 
 import {MockFVMTest} from "../src/mocks/MockFVMTest.sol";
 import {FVMActor} from "../src/FVMActor.sol";
+import {FVMActor as FVMActorMock} from "../src/mocks/FVMActor.sol";
 import {FVMAddress} from "../src/FVMAddress.sol";
 
 contract ResolveAddressTest is MockFVMTest {
@@ -354,6 +355,51 @@ contract ResolveAddressTest is MockFVMTest {
         (bool exists, bytes memory result) = actorId.tryLookupDelegatedAddress();
         assertTrue(exists, "Actor should exist");
         assertEq(result, expected, "Fuzzed delegated address should match");
+    }
+
+    // =============================================================
+    //                  FALLBACK ROUTING TESTS
+    // =============================================================
+
+    // if (address(this) == LOOKUP_DELEGATED_ADDRESS) branch
+    function testFallbackRoutesToLookupDelegatedAddress() public {
+        uint64 actorId = 42;
+        bytes memory expected = abi.encodePacked(uint8(0x04), uint8(0x0a), address(1));
+
+        LOOKUP_DELEGATED_ADDRESS_PRECOMPILE.mockLookupDelegatedAddress(actorId, expected);
+
+        // Raw call into LOOKUP_DELEGATED_ADDRESS — must use the lookupDelegatedAddress path
+        (bool success, bytes memory data) =
+            address(LOOKUP_DELEGATED_ADDRESS_PRECOMPILE).staticcall(abi.encode(uint256(actorId)));
+
+        assertTrue(success, "LOOKUP_DELEGATED_ADDRESS fallback should succeed");
+        assertEq(data, expected, "Should return delegated address bytes");
+    }
+
+    // else if (address(this) == RESOLVE_ADDRESS) branch
+    function testFallbackRoutesToResolveAddress() public {
+        uint64 actorId = 42;
+        bytes memory filAddress = abi.encodePacked(uint8(0x04), uint8(0x0a), address(1));
+
+        ACTOR_PRECOMPILE.mockResolveAddress(filAddress, actorId);
+
+        // Raw call into RESOLVE_ADDRESS — must use the resolveAddress path
+        (bool success, bytes memory data) = address(ACTOR_PRECOMPILE).staticcall(filAddress);
+
+        assertTrue(success, "RESOLVE_ADDRESS fallback should succeed");
+        assertEq(abi.decode(data, (uint256)), uint256(actorId), "Should return actor ID");
+    }
+
+    // neither branch — address(this) matches neither precompile
+    function testFallbackUnknownAddressReturnsEmpty() public {
+        // Deploy FVMActor at a random non-precompile address (not RESOLVE_ADDRESS or LOOKUP_DELEGATED_ADDRESS)
+        FVMActorMock unknownActor = new FVMActorMock();
+
+        // Neither branch in the fallback matches, so it should return empty bytes without reverting
+        (bool success, bytes memory data) = address(unknownActor).call(hex"deadbeef");
+
+        assertTrue(success, "Fallback at unknown address should not revert");
+        assertEq(data.length, 0, "Fallback at unknown address should return empty bytes");
     }
 
     // =============================================================
