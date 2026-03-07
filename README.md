@@ -13,6 +13,8 @@ git submodule add https://github.com/filecoin-project/fvm-solidity lib/fvm-solid
 ```
 
 ## Usage
+
+### FVMPay
 ```solidity
 import { FVMPay } from "fvm-solidity/FVMPay.sol";
 
@@ -31,17 +33,58 @@ contract BigBrain {
 }
 ```
 
+### FVMActor - ResolveAddress
+Resolve Filecoin or EVM (f410 / masked ID) addresses to their on-chain actor ID.
+
+```solidity
+import { FVMActor } from "fvm-solidity/FVMActor.sol";
+
+contract BigBrain {
+    using FVMActor for bytes;
+    using FVMActor for address;
+
+    // Resolve a Filecoin byte address
+    function resolveFilAddress(bytes calldata filAddress) external view returns (uint64 actorId) {
+        return filAddress.getActorId(); // reverts with ActorNotFound if not found
+    }
+
+    // Safely attempt to resolve (no revert on missing actor)
+    function tryResolveFilAddress(bytes calldata filAddress) external view returns (bool exists, uint64 actorId) {
+        return filAddress.tryGetActorId();
+    }
+
+    // Resolve an EVM address (f410 delegated) or masked ID (0xff) address
+    function resolveEvmAddress(address addr) external view returns (bool exists, uint64 actorId) {
+        return addr.tryGetActorId();
+    }
+}
+```
+
 ### Testing
 ```solidity
-import {BURN_ADDRESS} from "fvm-solidity/FVMActors.sol";
 import {MockFVMTest} from "fvm-solidity/mocks/MockFVMTest.sol";
+import {FVMActor} from "fvm-solidity/FVMActor.sol";
+import {FVMAddress} from "fvm-solidity/FVMAddress.sol";
 
 // MockFVMTest is Test
 contract BigBrainTest is MockFVMTest {
+    using FVMAddress for uint64;
+    using FVMActor for bytes;
+
     function setUp() public override {
         // Mock the FVM precompiles for forge test
         super.setUp();
         /* ... */
+    }
+
+    function test_resolveAddress() public {
+        uint64 actorId = 1234;
+        bytes memory filAddress = actorId.f0();
+        ACTOR_PRECOMPILE.mockResolveAddress(filAddress, actorId);
+
+        (bool exists, uint64 resolved) = filAddress.tryGetActorId();
+        assertTrue(exists);
+        assertEq(resolved, actorId);
     }
 }
 ```
@@ -66,7 +109,7 @@ Additional FVM support can be found in the [filecoin-solidity library](https://g
 
 | Supported | Name | Address |
 | :-------: | :--- | :------ |
-| ❌ | ResolveAddress | `0xfe00000000000000000000000000000000000001` |
+| ✅ | ResolveAddress | `0xfe00000000000000000000000000000000000001` |
 | ❌ | LookupDelegatedAddress | `0xfe00000000000000000000000000000000000002` |
 | ✅ | CallActorByAddress | `0xfe00000000000000000000000000000000000003` |
 | ✅ | CallActorById | `0xfe00000000000000000000000000000000000005` |
