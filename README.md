@@ -159,3 +159,11 @@ Additional FVM support can be found in the [filecoin-solidity library](https://g
 | :-------: | :--- | :----- |
 | ✅ | Send | 0 |
 | ❌ | Constructor | 1 |
+
+### Demo Deployment
+
+You can deploy the demo contract using the helper script:
+
+```sh
+./tools/deploy-demo.sh
+```
