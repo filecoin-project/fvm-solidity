@@ -3,7 +3,6 @@ pragma solidity ^0.8.30;
 
 import {MockFVMTest} from "../src/mocks/MockFVMTest.sol";
 import {FVMActor} from "../src/FVMActor.sol";
-import {FVMActor as FVMActorMock} from "../src/mocks/FVMActor.sol";
 import {FVMAddress} from "../src/FVMAddress.sol";
 
 contract ResolveAddressTest is MockFVMTest {
@@ -69,7 +68,7 @@ contract ResolveAddressTest is MockFVMTest {
         uint64 actorIdToMock = 1234;
         bytes memory filAddress = actorIdToMock.f0(); // f0 protocol + actor ID 1234
 
-        ACTOR_PRECOMPILE.mockResolveAddress(filAddress, actorIdToMock);
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(filAddress, actorIdToMock);
 
         (bool exists, uint64 actorId) = filAddress.tryGetActorId();
 
@@ -93,7 +92,7 @@ contract ResolveAddressTest is MockFVMTest {
         uint64 actorIdToMock = 1234;
         bytes memory filAddress = actorIdToMock.f0();
 
-        ACTOR_PRECOMPILE.mockResolveAddress(filAddress, actorIdToMock);
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(filAddress, actorIdToMock);
 
         uint64 actorId = filAddress.getActorId();
         assertEq(actorId, actorIdToMock, "Actor ID should match");
@@ -121,7 +120,7 @@ contract ResolveAddressTest is MockFVMTest {
         bytes memory f410Address = address(0x1234567890123456789012345678901234567890).f410();
         uint64 expectedActorId = 9999;
 
-        ACTOR_PRECOMPILE.mockResolveAddress(f410Address, expectedActorId);
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(f410Address, expectedActorId);
 
         (bool exists, uint64 actorId) = f410Address.tryGetActorId();
 
@@ -137,7 +136,7 @@ contract ResolveAddressTest is MockFVMTest {
         address addr = address(0x1234567890123456789012345678901234567890);
         uint64 expectedActorId = 5678;
 
-        ACTOR_PRECOMPILE.mockResolveAddress(addr, expectedActorId);
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(addr, expectedActorId);
 
         (bool exists, uint64 actorId) = addr.tryGetActorId();
 
@@ -158,7 +157,7 @@ contract ResolveAddressTest is MockFVMTest {
         address addr = address(0x1234567890123456789012345678901234567890);
         uint64 expectedActorId = 5678;
 
-        ACTOR_PRECOMPILE.mockResolveAddress(addr, expectedActorId);
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(addr, expectedActorId);
 
         uint64 actorId = addr.getActorId();
         assertEq(actorId, expectedActorId, "Actor ID should match");
@@ -181,7 +180,7 @@ contract ResolveAddressTest is MockFVMTest {
         address maskedBurnActor = address(bytes20(abi.encodePacked(hex"ff", bytes11(0), expectedActorId)));
 
         // Mock the f0 address for actor 99
-        ACTOR_PRECOMPILE.mockResolveAddress(expectedActorId.f0(), expectedActorId);
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(expectedActorId.f0(), expectedActorId);
 
         (bool exists, uint64 actorId) = maskedBurnActor.tryGetActorId();
 
@@ -195,7 +194,7 @@ contract ResolveAddressTest is MockFVMTest {
         address maskedSystemActor = address(bytes20(abi.encodePacked(hex"ff", bytes11(0), expectedActorId)));
 
         // Mock the f0 address for actor 0
-        ACTOR_PRECOMPILE.mockResolveAddress(expectedActorId.f0(), expectedActorId);
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(expectedActorId.f0(), expectedActorId);
 
         (bool exists, uint64 actorId) = maskedSystemActor.tryGetActorId();
 
@@ -209,7 +208,7 @@ contract ResolveAddressTest is MockFVMTest {
         address maskedAddr = address(bytes20(abi.encodePacked(hex"ff", bytes11(0), expectedActorId)));
 
         // Mock the f0 address for actor 1234
-        ACTOR_PRECOMPILE.mockResolveAddress(expectedActorId.f0(), expectedActorId);
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(expectedActorId.f0(), expectedActorId);
 
         (bool exists, uint64 actorId) = maskedAddr.tryGetActorId();
 
@@ -241,7 +240,7 @@ contract ResolveAddressTest is MockFVMTest {
         uint64 expectedActorId = 5678;
 
         // Mock as f410, not f0
-        ACTOR_PRECOMPILE.mockResolveAddress(regularAddr, expectedActorId);
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(regularAddr, expectedActorId);
 
         (bool exists, uint64 actorId) = regularAddr.tryGetActorId();
 
@@ -381,25 +380,13 @@ contract ResolveAddressTest is MockFVMTest {
         uint64 actorId = 42;
         bytes memory filAddress = abi.encodePacked(uint8(0x04), uint8(0x0a), address(1));
 
-        ACTOR_PRECOMPILE.mockResolveAddress(filAddress, actorId);
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(filAddress, actorId);
 
         // Raw call into RESOLVE_ADDRESS — must use the resolveAddress path
-        (bool success, bytes memory data) = address(ACTOR_PRECOMPILE).staticcall(filAddress);
+        (bool success, bytes memory data) = address(RESOLVE_ADDRESS_PRECOMPILE).staticcall(filAddress);
 
         assertTrue(success, "RESOLVE_ADDRESS fallback should succeed");
         assertEq(abi.decode(data, (uint256)), uint256(actorId), "Should return actor ID");
-    }
-
-    // neither branch — address(this) matches neither precompile
-    function testFallbackUnknownAddressReturnsEmpty() public {
-        // Deploy FVMActor at a random non-precompile address (not RESOLVE_ADDRESS or LOOKUP_DELEGATED_ADDRESS)
-        FVMActorMock unknownActor = new FVMActorMock();
-
-        // Neither branch in the fallback matches, so it should return empty bytes without reverting
-        (bool success, bytes memory data) = address(unknownActor).call(hex"deadbeef");
-
-        assertTrue(success, "Fallback at unknown address should not revert");
-        assertEq(data.length, 0, "Fallback at unknown address should return empty bytes");
     }
 
     // =============================================================
@@ -411,7 +398,7 @@ contract ResolveAddressTest is MockFVMTest {
         address ethAddr = address(0x1234567890123456789012345678901234567890);
         uint64 actorId = 1234;
 
-        ACTOR_PRECOMPILE.mockResolveAddress(ethAddr, actorId);
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(ethAddr, actorId);
         LOOKUP_DELEGATED_ADDRESS_PRECOMPILE.mockLookupDelegatedAddress(actorId, ethAddr);
 
         uint64 resolvedId = ethAddr.getActorId();
@@ -427,7 +414,7 @@ contract ResolveAddressTest is MockFVMTest {
         uint64 actorId = 5678;
         bytes memory f410Addr = ethAddr.f410();
 
-        ACTOR_PRECOMPILE.mockResolveAddress(f410Addr, actorId);
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(f410Addr, actorId);
         LOOKUP_DELEGATED_ADDRESS_PRECOMPILE.mockLookupDelegatedAddress(actorId, ethAddr);
 
         uint64 resolvedId = f410Addr.getActorId();
@@ -443,8 +430,9 @@ contract ResolveAddressTest is MockFVMTest {
         // because their constructor mocks are keyed by f0 encoding,
         // whereas the mockResolveAddress below keys by f410 encoding.
         vm.assume(actorId != 0);
+        vm.assume(uint8(uint160(ethAddr) >> 152) != 0xff);
 
-        ACTOR_PRECOMPILE.mockResolveAddress(ethAddr, actorId);
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(ethAddr, actorId);
         LOOKUP_DELEGATED_ADDRESS_PRECOMPILE.mockLookupDelegatedAddress(actorId, ethAddr);
 
         uint64 resolvedId = ethAddr.getActorId();
