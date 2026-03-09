@@ -52,8 +52,8 @@ library FVMAddress {
             let firstWord := mload(add(delegatedAddress, 0x20))
 
             // Check 0x040a prefix (protocol 0x04, namespace 0x0a)
-            // Shift right 240 bits (30 bytes) to get first 2 bytes
-            if iszero(eq(shr(240, firstWord), 0x040a)) {
+            // shr(240, firstWord) isolates the top 2 bytes; xor is 0 iff equal
+            if xor(shr(240, firstWord), 0x040a) {
                 mstore(0, 0x8eb60a41) // InvalidDelegatedAddress.selector
                 revert(28, 4)
             }
