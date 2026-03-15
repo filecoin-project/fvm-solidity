@@ -60,6 +60,47 @@ contract BigBrain {
 }
 ```
 
+### FVMActor - LookupDelegatedAddress
+Look up the delegated (f4 / f410) address associated with an actor ID on the FEVM.
+
+```solidity
+import { FVMActor } from "fvm-solidity/FVMActor.sol";
+
+contract BigBrain {
+    using FVMActor for uint64;
+
+    // Try lookup without reverting
+    function tryLookup(uint64 actorId) external view returns (bool exists, address addr) {
+        return actorId.tryLookupDelegatedAddress();
+    }
+
+    // Strict lookup (reverts if not found)
+    function lookup(uint64 actorId) external view returns (address) {
+        return actorId.lookupDelegatedAddress();
+    }
+}
+```
+
+#### Raw delegated address bytes
+
+If you need the raw f4 / f410 encoded address:
+
+```solidity
+import {FVMActor} from "fvm-solidity/FVMActor.sol";
+
+contract BigBrain {
+    using FVMActor for uint64;
+
+    function tryLookupBytes(uint64 actorId) external view returns (bool exists, bytes memory delegated) {
+        return actorId.tryLookupDelegatedAddressBytes();
+    }
+
+    function lookupBytes(uint64 actorId) external view returns (bytes memory delegated) {
+        return actorId.lookupDelegatedAddressBytes();
+    }
+}
+```
+
 ### Testing
 ```solidity
 import {MockFVMTest} from "fvm-solidity/mocks/MockFVMTest.sol";
@@ -70,6 +111,7 @@ import {FVMAddress} from "fvm-solidity/FVMAddress.sol";
 contract BigBrainTest is MockFVMTest {
     using FVMAddress for uint64;
     using FVMActor for bytes;
+    using FVMActor for uint64;
 
     function setUp() public override {
         // Mock the FVM precompiles for forge test
@@ -80,11 +122,21 @@ contract BigBrainTest is MockFVMTest {
     function test_resolveAddress() public {
         uint64 actorId = 1234;
         bytes memory filAddress = actorId.f0();
-        ACTOR_PRECOMPILE.mockResolveAddress(filAddress, actorId);
+        RESOLVE_ADDRESS_PRECOMPILE.mockResolveAddress(filAddress, actorId);
 
         (bool exists, uint64 resolved) = filAddress.tryGetActorId();
         assertTrue(exists);
         assertEq(resolved, actorId);
+    }
+
+    function test_lookupDelegatedAddress() public {
+        uint64 actorId = 1234;
+        address ethAddr = address(0x1234567890123456789012345678901234567890);
+        LOOKUP_DELEGATED_ADDRESS_PRECOMPILE.mockLookupDelegatedAddress(actorId, ethAddr);
+
+        (bool exists, address addr) = actorId.tryLookupDelegatedAddress();
+        assertTrue(exists);
+        assertEq(addr, ethAddr);
     }
 }
 ```
@@ -110,7 +162,7 @@ Additional FVM support can be found in the [filecoin-solidity library](https://g
 | Supported | Name | Address |
 | :-------: | :--- | :------ |
 | ✅ | ResolveAddress | `0xfe00000000000000000000000000000000000001` |
-| ❌ | LookupDelegatedAddress | `0xfe00000000000000000000000000000000000002` |
+| ✅ | LookupDelegatedAddress | `0xfe00000000000000000000000000000000000002` |
 | ✅ | CallActorByAddress | `0xfe00000000000000000000000000000000000003` |
 | ✅ | CallActorById | `0xfe00000000000000000000000000000000000005` |
 | ✅ | GetBeaconRandomness | `0xfe00000000000000000000000000000000000006` |
@@ -121,3 +173,11 @@ Additional FVM support can be found in the [filecoin-solidity library](https://g
 | :-------: | :--- | :----- |
 | ✅ | Send | 0 |
 | ❌ | Constructor | 1 |
+
+### Demo Deployment
+
+You can deploy the demo contract using the helper script:
+
+```sh
+./tools/deploy-demo.sh
+```
