@@ -89,18 +89,28 @@ contract Demo {
     // delegated address lookup
     using FVMActor for uint64;
 
-    /// @notice Try to look up the delegated address of an actor by ID
-    function tryLookupDelegatedAddress(uint64 actorId)
+    /// @notice Try to look up the delegated EVM address of an actor by ID
+    function tryLookupDelegatedAddress(uint64 actorId) external view returns (bool exists, address ethAddress) {
+        return actorId.tryLookupDelegatedAddress();
+    }
+
+    /// @notice Look up the delegated EVM address of an actor, requiring it exists
+    function lookupDelegatedAddress(uint64 actorId) external view returns (address ethAddress) {
+        return actorId.lookupDelegatedAddress();
+    }
+
+    /// @notice Try to look up the delegated address of an actor by ID as raw bytes
+    function tryLookupDelegatedAddressBytes(uint64 actorId)
         external
         view
         returns (bool exists, bytes memory delegatedAddress)
     {
-        return actorId.tryLookupDelegatedAddress();
+        return actorId.tryLookupDelegatedAddressBytes();
     }
 
-    /// @notice Look up the delegated address of an actor, requiring it exists
-    function lookupDelegatedAddress(uint64 actorId) external view returns (bytes memory delegatedAddress) {
-        return actorId.lookupDelegatedAddress();
+    /// @notice Look up the delegated address of an actor as raw bytes, requiring it exists
+    function lookupDelegatedAddressBytes(uint64 actorId) external view returns (bytes memory delegatedAddress) {
+        return actorId.lookupDelegatedAddressBytes();
     }
 
     // address encoding
