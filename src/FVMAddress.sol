@@ -55,6 +55,6 @@ library FVMAddress {
     /// @dev Use FVMActor.tryGetActorId to test if the actorId is valid
     function safeActorId(address maskedAddr) internal pure returns (uint64) {
         require(uint160(maskedAddr) >> 64 == 0xff0000000000000000000000, NotMaskedIdAddress(maskedAddr));
-        return uint64(uint160(maskedAddr));
+        return actorId(maskedAddr);
     }
 }
