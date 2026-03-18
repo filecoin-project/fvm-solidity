@@ -39,8 +39,10 @@ library FVMAddress {
 
     /// @notice Creates a masked ID address (the EVM encoding of an f0 actor ID)
     /// @dev Format: 0xff + 11 zero bytes + big-endian uint64 actor ID (20 bytes total)
-    function maskedAddress(uint64 actorId) internal pure returns (address) {
-        return address(bytes20(abi.encodePacked(bytes1(0xff), bytes11(0), actorId)));
+    function maskedAddress(uint64 actorId) internal pure returns (address maskedAddr) {
+        assembly ("memory-safe") {
+            maskedAddr := or(actorId, 0xff00000000000000000000000000000000000000)
+        }
     }
 
     /// @notice Extracts the actor ID from a masked ID address without prefix validation
