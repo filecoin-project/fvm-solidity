@@ -194,12 +194,12 @@ library FVMSectorContentChanged {
         (numSectors, nextOffset) = _cdReadArrayHeader(off);
     }
 
-    /// @notice Read one sector header at `cdOffset`; returns the header and the offset of the
-    ///         first piece's CBOR data.
-    function readSectorHeader(uint256 cdOffset)
+    /// @notice Read one sector header at `cdOffset`, filling `header` in place.
+    /// @dev Caller allocates the struct once (outside any loop) and reuses it.
+    function readSectorHeader(uint256 cdOffset, SectorChangesHeader memory header)
         internal
         pure
-        returns (SectorChangesHeader memory header, uint256 nextOffset)
+        returns (uint256 nextOffset)
     {
         uint256 len;
         (len, cdOffset) = _cdReadArrayHeader(cdOffset);
@@ -209,8 +209,9 @@ library FVMSectorContentChanged {
         (header.numPieces, nextOffset) = _cdReadArrayHeader(cdOffset);
     }
 
-    /// @notice Read one piece at `cdOffset`; returns the piece and the offset of the next piece.
-    function readPiece(uint256 cdOffset) internal pure returns (PieceChangeIter memory piece, uint256 nextOffset) {
+    /// @notice Read one piece at `cdOffset`, filling `piece` in place.
+    /// @dev Caller allocates the struct once (outside any loop) and reuses it.
+    function readPiece(uint256 cdOffset, PieceChangeIter memory piece) internal pure returns (uint256 nextOffset) {
         uint256 len;
         (len, cdOffset) = _cdReadArrayHeader(cdOffset);
         require(len == 3, UnexpectedStructLength(3, len));
@@ -448,5 +449,4 @@ library FVMSectorContentChanged {
         }
         revert CborLengthTooLarge();
     }
-
 }

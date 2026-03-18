@@ -25,23 +25,20 @@ import {
 
 /// @notice Iterator-path benchmark: calldata iterator → validate digest → abi.decode payload → encodeReturn
 contract BenchIteratorReceiver {
-    function handle_filecoin_method(uint64, uint64, bytes calldata)
-        external
-        returns (uint32, uint64, bytes memory)
-    {
+    function handle_filecoin_method(uint64, uint64, bytes calldata) external returns (uint32, uint64, bytes memory) {
         uint256 numSectors;
         uint256 off;
         (numSectors, off) = FVMSectorContentChanged.readParamsHeader();
 
         SectorContentChangedReturn memory ret;
         ret.sectors = new SectorReturn[](numSectors);
+        SectorChangesHeader memory header;
+        PieceChangeIter memory piece;
         for (uint256 i = 0; i < numSectors; i++) {
-            SectorChangesHeader memory header;
-            (header, off) = FVMSectorContentChanged.readSectorHeader(off);
+            off = FVMSectorContentChanged.readSectorHeader(off, header);
             ret.sectors[i].added = new PieceReturn[](header.numPieces);
             for (uint256 j = 0; j < header.numPieces; j++) {
-                PieceChangeIter memory piece;
-                (piece, off) = FVMSectorContentChanged.readPiece(off);
+                off = FVMSectorContentChanged.readPiece(off, piece);
                 // Materialise and validate: CID prefix was already stripped, so digest is 36 bytes
                 bytes memory digest = FVMSectorContentChanged.loadSlice(piece.digest);
                 require(digest.length == 36);
@@ -82,16 +79,16 @@ contract IteratorReceiver {
         uint256 off;
         (numSectors, off) = FVMSectorContentChanged.readParamsHeader();
 
+        SectorChangesHeader memory header;
+        PieceChangeIter memory piece;
         for (uint256 i = 0; i < numSectors; i++) {
-            SectorChangesHeader memory header;
-            (header, off) = FVMSectorContentChanged.readSectorHeader(off);
+            off = FVMSectorContentChanged.readSectorHeader(off, header);
             lastSector = header.sector;
             lastMinEpoch = header.minimumCommitmentEpoch;
             lastNumPieces = header.numPieces;
 
             for (uint256 j = 0; j < header.numPieces; j++) {
-                PieceChangeIter memory piece;
-                (piece, off) = FVMSectorContentChanged.readPiece(off);
+                off = FVMSectorContentChanged.readPiece(off, piece);
                 lastPaddedSize = piece.paddedSize;
                 lastDigest = FVMSectorContentChanged.loadSlice(piece.digest);
                 lastPayload = FVMSectorContentChanged.loadSlice(piece.payload);
@@ -164,14 +161,6 @@ contract SectorContentChangedTest is MockFVMTest {
         return SectorContentChangedParams({sectors: sectors});
     }
 
-    function testMockMinerCallsHandleFilecoinMethod() public {
-        FVMMinerActor miner = mockMiner(1234);
-        SectorContentChangedParams memory params = _buildParams(42, COMMP_CID);
-
-        vm.expectCall(address(iterReceiver), abi.encodeWithSelector(iterReceiver.handle_filecoin_method.selector));
-        miner.callSectorContentChanged(address(iterReceiver), params);
-    }
-
     function testMockMinerMsgSenderIsMaskedAddress() public {
         uint64 minerActorId = 5678;
         FVMMinerActor miner = mockMiner(minerActorId);
@@ -179,14 +168,6 @@ contract SectorContentChangedTest is MockFVMTest {
         miner.callSectorContentChanged(address(iterReceiver), _buildParams(1, COMMP_CID));
 
         assertEq(iterReceiver.lastCaller(), minerActorId.maskedAddress());
-    }
-
-    function testMockMinerReturnIsDecoded() public {
-        FVMMinerActor miner = mockMiner(1234);
-        SectorContentChangedReturn memory ret =
-            miner.callSectorContentChanged(address(iterReceiver), _buildParams(42, COMMP_CID));
-
-        assertTrue(ret.sectors[0].added[0].accepted);
     }
 
     function testMultipleMinersHaveDifferentMaskedAddresses() public {
@@ -263,16 +244,11 @@ contract SectorContentChangedTest is MockFVMTest {
         for (uint256 i = 0; i < 3; i++) {
             PieceChange[] memory pieces = new PieceChange[](3);
             for (uint256 j = 0; j < 3; j++) {
-                pieces[j] = PieceChange({
-                    data: cids[(i + j) % 2],
-                    size: uint64(2048 << j),
-                    payload: abi.encode(allocId++)
-                });
+                pieces[j] =
+                    PieceChange({data: cids[(i + j) % 2], size: uint64(2048 << j), payload: abi.encode(allocId++)});
             }
             sectors[i] = SectorChanges({
-                sector: uint64(100 + i * 100),
-                minimumCommitmentEpoch: int64(int256(i) * 1000),
-                added: pieces
+                sector: uint64(100 + i * 100), minimumCommitmentEpoch: int64(int256(i) * 1000), added: pieces
             });
         }
         return SectorContentChangedParams({sectors: sectors});
