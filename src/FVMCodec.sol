@@ -4,5 +4,8 @@ pragma solidity ^0.8.30;
 // @dev empty returned data
 uint64 constant EMPTY_CODEC = 0;
 
+// @dev CBOR-encoded data
+uint64 constant CBOR_CODEC = 0x51;
+
 // @dev actor returned unencoded raw data
 uint64 constant RAW_CODEC = 0x55;

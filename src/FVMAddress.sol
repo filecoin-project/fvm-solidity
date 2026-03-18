@@ -2,6 +2,8 @@
 pragma solidity ^0.8.30;
 
 library FVMAddress {
+    error NotMaskedIdAddress(address addr);
+
     /// @notice Creates an f0 (ID) address in bytes using unsigned LEB128 encoding
     function f0(uint64 actorId) internal pure returns (bytes memory buffer) {
         // Max size: 1 protocol byte + 10 bytes for uint64 LEB128 encoding
@@ -33,5 +35,24 @@ library FVMAddress {
     /// @notice Creates an f410 address for a Solidity address
     function f410(address addr) internal pure returns (bytes memory) {
         return f4(0x0a, bytes20(addr));
+    }
+
+    /// @notice Creates a masked ID address (the EVM encoding of an f0 actor ID)
+    /// @dev Format: 0xff + 11 zero bytes + big-endian uint64 actor ID (20 bytes total)
+    function maskedAddress(uint64 actorId) internal pure returns (address) {
+        return address(bytes20(abi.encodePacked(bytes1(0xff), bytes11(0), actorId)));
+    }
+
+    /// @notice Extracts the actor ID from a masked ID address without prefix validation
+    /// @dev Only call when the address is known to have the 0xff000...000 prefix
+    function actorId(address maskedAddr) internal pure returns (uint64) {
+        return uint64(uint160(maskedAddr));
+    }
+
+    /// @notice Extracts the actor ID from a masked ID address, reverting if the prefix is wrong
+    /// @dev Use FVMActor.tryGetActorId to test if the actorId is valid
+    function safeActorId(address maskedAddr) internal pure returns (uint64) {
+        require(uint160(maskedAddr) >> 64 == 0xff0000000000000000000000, NotMaskedIdAddress(maskedAddr));
+        return uint64(uint160(maskedAddr));
     }
 }
