@@ -10,7 +10,6 @@ import {
     FVMSectorContentChanged,
     PieceChange,
     PieceChangeIter,
-    PieceReturn,
     SectorChanges,
     SectorChangesHeader,
     SectorContentChangedParams,
@@ -22,9 +21,13 @@ import {
 //              BENCHMARK RECEIVER CONTRACT
 // =============================================================
 
-/// @notice Iterator-path benchmark: calldata iterator → validate digest → abi.decode payload → encodeReturn
+/// @notice Benchmark receiver: calldata iterator → validate digest → abi.decode payload → encodeReturn
 contract BenchIteratorReceiver {
-    function handle_filecoin_method(uint64, uint64, bytes calldata) external pure returns (uint32, uint64, bytes memory) {
+    function handle_filecoin_method(uint64, uint64, bytes calldata)
+        external
+        pure
+        returns (uint32, uint64, bytes memory)
+    {
         uint256 numSectors;
         uint256 off;
         (numSectors, off) = FVMSectorContentChanged.readParamsHeader();
@@ -35,7 +38,7 @@ contract BenchIteratorReceiver {
         PieceChangeIter memory piece;
         for (uint256 i = 0; i < numSectors; i++) {
             off = FVMSectorContentChanged.readSectorHeader(off, header);
-            ret.sectors[i].added = new PieceReturn[](header.numPieces);
+            FVMSectorContentChanged.initSectorReturn(ret.sectors[i], header.numPieces);
             for (uint256 j = 0; j < header.numPieces; j++) {
                 off = FVMSectorContentChanged.readPiece(off, piece);
                 // Materialise and validate: CID prefix was already stripped, so digest is 36 bytes
@@ -44,7 +47,7 @@ contract BenchIteratorReceiver {
                 // Decode and validate the allocation ID
                 uint64 allocationId = abi.decode(FVMSectorContentChanged.loadSlice(piece.payload), (uint64));
                 require(allocationId > 0);
-                ret.sectors[i].added[j].accepted = true;
+                FVMSectorContentChanged.accept(ret.sectors[i], j);
             }
         }
         return (0, CBOR_CODEC, FVMSectorContentChanged.encodeReturn(ret));
@@ -94,15 +97,12 @@ contract IteratorReceiver {
             }
         }
 
-        // Accept everything
+        // Accept everything (simplified: uses lastNumPieces for all sectors)
         SectorContentChangedReturn memory ret;
-        // (simplified: only handles last sector's piece count)
         ret.sectors = new SectorReturn[](numSectors);
         for (uint256 i = 0; i < numSectors; i++) {
-            ret.sectors[i].added = new PieceReturn[](lastNumPieces);
-            for (uint256 j = 0; j < lastNumPieces; j++) {
-                ret.sectors[i].added[j].accepted = true;
-            }
+            FVMSectorContentChanged.initSectorReturn(ret.sectors[i], lastNumPieces);
+            FVMSectorContentChanged.acceptAll(ret.sectors[i]);
         }
         return (0, CBOR_CODEC, FVMSectorContentChanged.encodeReturn(ret));
     }
@@ -133,9 +133,9 @@ contract SectorContentChangedTest is MockFVMTest {
 
     function testReturnRoundtrip() public pure {
         SectorReturn[] memory sectorRets = new SectorReturn[](1);
-        sectorRets[0].added = new PieceReturn[](2);
-        sectorRets[0].added[0].accepted = true;
-        sectorRets[0].added[1].accepted = false;
+        sectorRets[0].numPieces = 2;
+        sectorRets[0].accepted = new uint256[](1);
+        sectorRets[0].accepted[0] = 1; // bit 0 = piece 0 accepted; bit 1 clear = piece 1 rejected
 
         SectorContentChangedReturn memory ret = SectorContentChangedReturn({sectors: sectorRets});
 
@@ -143,9 +143,9 @@ contract SectorContentChangedTest is MockFVMTest {
         SectorContentChangedReturn memory decoded = FVMSectorContentChanged.decodeReturn(encoded);
 
         assertEq(decoded.sectors.length, 1);
-        assertEq(decoded.sectors[0].added.length, 2);
-        assertTrue(decoded.sectors[0].added[0].accepted);
-        assertFalse(decoded.sectors[0].added[1].accepted);
+        assertEq(decoded.sectors[0].numPieces, 2);
+        assertTrue((decoded.sectors[0].accepted[0] & 1) != 0); // piece 0 accepted
+        assertFalse((decoded.sectors[0].accepted[0] & 2) != 0); // piece 1 rejected
     }
 
     // -------------------------
@@ -253,8 +253,32 @@ contract SectorContentChangedTest is MockFVMTest {
         return SectorContentChangedParams({sectors: sectors});
     }
 
+    function _buildBenchParamsLarge() internal pure returns (SectorContentChangedParams memory) {
+        uint256 numSectors = 3;
+        uint256 numPieces = 32;
+        SectorChanges[] memory sectors = new SectorChanges[](numSectors);
+        uint64 allocId = 1;
+        bytes[2] memory cids = [COMMP_CID, COMMP_CID2];
+        for (uint256 i = 0; i < numSectors; i++) {
+            PieceChange[] memory pieces = new PieceChange[](numPieces);
+            for (uint256 j = 0; j < numPieces; j++) {
+                pieces[j] =
+                    PieceChange({data: cids[j % 2], size: uint64(2048 << (j % 8)), payload: abi.encode(allocId++)});
+            }
+            sectors[i] = SectorChanges({
+                sector: uint64(100 + i * 100), minimumCommitmentEpoch: int64(int256(i) * 1000), added: pieces
+            });
+        }
+        return SectorContentChangedParams({sectors: sectors});
+    }
+
     function testGasBenchIteratorPath() public {
         FVMMinerActor miner = mockMiner(9002);
         miner.callSectorContentChanged(address(benchIterator), _buildBenchParams());
+    }
+
+    function testGasBenchIteratorPathLarge() public {
+        FVMMinerActor miner = mockMiner(9004);
+        miner.callSectorContentChanged(address(benchIterator), _buildBenchParamsLarge());
     }
 }

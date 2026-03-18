@@ -27,14 +27,11 @@ struct SectorContentChangedParams {
     SectorChanges[] sectors;
 }
 
-/// @notice Per-piece response returned by the receiving contract
-struct PieceReturn {
-    bool accepted;
-}
-
-/// @notice Per-sector response returned by the receiving contract
+/// @notice Per-sector response returned by the receiving contract.
+///         Bit j of accepted[j/256] indicates whether piece j was accepted.
 struct SectorReturn {
-    PieceReturn[] added;
+    uint256 numPieces;
+    uint256[] accepted;
 }
 
 /// @notice Return value for the SectorContentChanged notification
@@ -89,15 +86,35 @@ library FVMSectorContentChanged {
     //              ENCODE RETURN  (production use)
     // =========================================================
 
-    /// @notice Encode SectorContentChangedReturn to CBOR
+    /// @notice Initialise a caller-allocated SectorReturn for `numPieces` pieces.
+    function initSectorReturn(SectorReturn memory sr, uint256 numPieces) internal pure {
+        sr.numPieces = numPieces;
+        sr.accepted = new uint256[]((numPieces + 255) >> 8);
+    }
+
+    /// @notice Mark piece `i` as accepted in a SectorReturn.
+    function accept(SectorReturn memory sr, uint256 i) internal pure {
+        sr.accepted[i >> 8] |= (uint256(1) << (i & 0xff));
+    }
+
+    /// @notice Mark all pieces as accepted in a SectorReturn.
+    function acceptAll(SectorReturn memory sr) internal pure {
+        uint256 words = sr.accepted.length;
+        for (uint256 w = 0; w < words; w++) {
+            sr.accepted[w] = type(uint256).max;
+        }
+    }
+
+    /// @notice Encode SectorContentChangedReturn to CBOR.
     /// @dev Calculates exact output size first, allocates one buffer, writes in a single pass.
+    ///      Bit j of accepted[j/256] encodes whether piece j was accepted.
     function encodeReturn(SectorContentChangedReturn memory ret) internal pure returns (bytes memory result) {
         // Pass 1: exact size.
         // Outer tuple (1 byte) + sectors array header + per-sector SectorReturn tuple header (always 1 byte, hoisted)
         uint256 size = 1 + _cborArrayHeaderSize(ret.sectors.length) + ret.sectors.length;
         for (uint256 i = 0; i < ret.sectors.length; i++) {
-            // pieces array header + 2 bytes per PieceReturn ([accepted] = 0x81 + 0xf4/0xf5)
-            size += _cborArrayHeaderSize(ret.sectors[i].added.length) + ret.sectors[i].added.length * 2;
+            // pieces array header + 2 bytes per piece ([accepted] = 0x81 + 0xf4/0xf5)
+            size += _cborArrayHeaderSize(ret.sectors[i].numPieces) + ret.sectors[i].numPieces * 2;
         }
 
         // Pass 2: allocate once, write directly via a raw memory pointer
@@ -111,9 +128,10 @@ library FVMSectorContentChanged {
         for (uint256 i = 0; i < ret.sectors.length; i++) {
             SectorReturn memory sr = ret.sectors[i];
             ptr = _writeCborArrayHeader(ptr, 1);
-            ptr = _writeCborArrayHeader(ptr, sr.added.length);
-            for (uint256 j = 0; j < sr.added.length; j++) {
-                bool accepted = sr.added[j].accepted;
+            ptr = _writeCborArrayHeader(ptr, sr.numPieces);
+            for (uint256 j = 0; j < sr.numPieces; j++) {
+                // bit j of accepted[j/256]; j>>8 == j/256, j&0xff == j%256
+                uint256 accepted = (sr.accepted[j >> 8] >> (j & 0xff)) & 1;
                 assembly ("memory-safe") {
                     mstore8(ptr, 0x81)
                     mstore8(add(ptr, 1), add(0xf4, accepted)) // false=0xf4, true=0xf5
@@ -169,14 +187,14 @@ library FVMSectorContentChanged {
         (numSectors, offset) = _readArrayHeader(data, offset);
         ret.sectors = new SectorReturn[](numSectors);
         for (uint256 i = 0; i < numSectors; i++) {
-            // SectorReturn = [added_array]
             uint256 sectorRetLen;
             (sectorRetLen, offset) = _readArrayHeader(data, offset);
             require(sectorRetLen == 1, UnexpectedStructLength(1, sectorRetLen));
 
             uint256 numPieces;
             (numPieces, offset) = _readArrayHeader(data, offset);
-            ret.sectors[i].added = new PieceReturn[](numPieces);
+            ret.sectors[i].numPieces = numPieces;
+            ret.sectors[i].accepted = new uint256[]((numPieces + 255) >> 8);
             for (uint256 j = 0; j < numPieces; j++) {
                 // PieceReturn = [accepted]
                 uint256 pieceRetLen;
@@ -185,7 +203,7 @@ library FVMSectorContentChanged {
 
                 uint8 b = uint8(data[offset++]);
                 require(b == 0xf4 || b == 0xf5, InvalidCborBool(b));
-                ret.sectors[i].added[j].accepted = (b == 0xf5);
+                if (b == 0xf5) ret.sectors[i].accepted[j >> 8] |= (uint256(1) << (j & 0xff));
             }
         }
     }
