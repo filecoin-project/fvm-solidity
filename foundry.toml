@@ -21,6 +21,7 @@ remappings = [
 
 [lint]
 exclude_lints = [
+    "incorrect-shift",
     "mixed-case-function",
     "unsafe-typecast",
 ]

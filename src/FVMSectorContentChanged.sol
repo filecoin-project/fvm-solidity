@@ -90,23 +90,37 @@ library FVMSectorContentChanged {
     // =========================================================
 
     /// @notice Encode SectorContentChangedReturn to CBOR
-    /// @dev Receiving contracts call this to build the return value
+    /// @dev Calculates exact output size first, allocates one buffer, writes in a single pass.
     function encodeReturn(SectorContentChangedReturn memory ret) internal pure returns (bytes memory result) {
-        bytes memory sectorsArr = _cborArrayHeader(ret.sectors.length);
+        // Pass 1: exact size.
+        // Outer tuple (1 byte) + sectors array header + per-sector SectorReturn tuple header (always 1 byte, hoisted)
+        uint256 size = 1 + _cborArrayHeaderSize(ret.sectors.length) + ret.sectors.length;
+        for (uint256 i = 0; i < ret.sectors.length; i++) {
+            // pieces array header + 2 bytes per PieceReturn ([accepted] = 0x81 + 0xf4/0xf5)
+            size += _cborArrayHeaderSize(ret.sectors[i].added.length) + ret.sectors[i].added.length * 2;
+        }
+
+        // Pass 2: allocate once, write directly via a raw memory pointer
+        result = new bytes(size);
+        uint256 ptr;
+        assembly ("memory-safe") {
+            ptr := add(result, 32)
+        }
+        ptr = _writeCborArrayHeader(ptr, 1);
+        ptr = _writeCborArrayHeader(ptr, ret.sectors.length);
         for (uint256 i = 0; i < ret.sectors.length; i++) {
             SectorReturn memory sr = ret.sectors[i];
-            bytes memory piecesArr = _cborArrayHeader(sr.added.length);
+            ptr = _writeCborArrayHeader(ptr, 1);
+            ptr = _writeCborArrayHeader(ptr, sr.added.length);
             for (uint256 j = 0; j < sr.added.length; j++) {
-                // PieceReturn = [accepted]
-                piecesArr = abi.encodePacked(
-                    piecesArr, _cborArrayHeader(1), sr.added[j].accepted ? bytes1(0xf5) : bytes1(0xf4)
-                );
+                bool accepted = sr.added[j].accepted;
+                assembly ("memory-safe") {
+                    mstore8(ptr, 0x81)
+                    mstore8(add(ptr, 1), add(0xf4, accepted)) // false=0xf4, true=0xf5
+                    ptr := add(ptr, 2)
+                }
             }
-            // SectorReturn = [added_array]
-            sectorsArr = abi.encodePacked(sectorsArr, _cborArrayHeader(1), piecesArr);
         }
-        // SectorContentChangedReturn = [sectors_array]
-        return abi.encodePacked(_cborArrayHeader(1), sectorsArr);
     }
 
     // =========================================================
@@ -391,6 +405,48 @@ library FVMSectorContentChanged {
     // =========================================================
     //                  CBOR WRITE PRIMITIVES
     // =========================================================
+
+    function _cborArrayHeaderSize(uint256 len) private pure returns (uint256) {
+        if (len <= 23) return 1; // 0x8n            (1-byte header)
+        if (len <= 0xff) return 2; // 0x98 + uint8   (2-byte header)
+        if (len <= 0xffff) return 3; // 0x99 + uint16  (3-byte header)
+        return 5; // 0x9a + uint32   (5-byte header; no 4-byte form exists in CBOR)
+    }
+
+    function _writeCborArrayHeader(uint256 ptr, uint256 len) private pure returns (uint256 newPtr) {
+        assembly ("memory-safe") {
+            switch gt(len, 0xff)
+            case 0 {
+                switch gt(len, 23)
+                case 0 {
+                    mstore8(ptr, or(0x80, len))
+                    newPtr := add(ptr, 1)
+                }
+                default {
+                    mstore8(ptr, 0x98)
+                    mstore8(add(ptr, 1), len)
+                    newPtr := add(ptr, 2)
+                }
+            }
+            default {
+                switch gt(len, 0xffff)
+                case 0 {
+                    mstore8(ptr, 0x99)
+                    mstore8(add(ptr, 1), shr(8, len))
+                    mstore8(add(ptr, 2), and(len, 0xff))
+                    newPtr := add(ptr, 3)
+                }
+                default {
+                    mstore8(ptr, 0x9a)
+                    mstore8(add(ptr, 1), shr(24, len))
+                    mstore8(add(ptr, 2), shr(16, len))
+                    mstore8(add(ptr, 3), shr(8, len))
+                    mstore8(add(ptr, 4), and(len, 0xff))
+                    newPtr := add(ptr, 5)
+                }
+            }
+        }
+    }
 
     function _cborArrayHeader(uint256 len) private pure returns (bytes memory) {
         if (len <= 23) return abi.encodePacked(uint8(0x80 | uint8(len)));

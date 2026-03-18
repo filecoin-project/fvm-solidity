@@ -8,7 +8,6 @@ import {CBOR_CODEC} from "../src/FVMCodec.sol";
 import {SECTOR_CONTENT_CHANGED} from "../src/FVMMethod.sol";
 import {
     FVMSectorContentChanged,
-    CalldataSlice,
     PieceChange,
     PieceChangeIter,
     PieceReturn,
@@ -25,7 +24,7 @@ import {
 
 /// @notice Iterator-path benchmark: calldata iterator → validate digest → abi.decode payload → encodeReturn
 contract BenchIteratorReceiver {
-    function handle_filecoin_method(uint64, uint64, bytes calldata) external returns (uint32, uint64, bytes memory) {
+    function handle_filecoin_method(uint64, uint64, bytes calldata) external pure returns (uint32, uint64, bytes memory) {
         uint256 numSectors;
         uint256 off;
         (numSectors, off) = FVMSectorContentChanged.readParamsHeader();
