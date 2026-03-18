@@ -47,6 +47,17 @@ struct SectorContentChangedReturn {
 // =============================================================
 
 library FVMSectorContentChanged {
+    /// @dev CBOR major type byte did not match what was expected
+    error UnexpectedCborMajorType(uint8 expected, uint8 actual);
+    /// @dev CBOR array or byte string length exceeds what this decoder handles
+    error CborLengthTooLarge();
+    /// @dev A struct tuple array had the wrong number of elements
+    error UnexpectedStructLength(uint256 expected, uint256 actual);
+    /// @dev A CBOR bool value was neither 0xf4 (false) nor 0xf5 (true)
+    error InvalidCborBool(uint8 actual);
+    /// @dev CID was not encoded as CBOR tag 42
+    error InvalidCidTag();
+
     // =========================================================
     //              DECODE PARAMS  (production use)
     // =========================================================
@@ -59,7 +70,7 @@ library FVMSectorContentChanged {
         // Outer 1-element tuple (SectorContentChangedParams struct)
         uint256 outerLen;
         (outerLen, offset) = _readArrayHeader(data, offset);
-        require(outerLen == 1, "SCC: expected 1-element outer array");
+        require(outerLen == 1, UnexpectedStructLength(1, outerLen));
 
         // Sectors list
         uint256 numSectors;
@@ -77,7 +88,7 @@ library FVMSectorContentChanged {
     {
         uint256 len;
         (len, offset) = _readArrayHeader(data, offset);
-        require(len == 3, "SCC: expected 3-element SectorChanges");
+        require(len == 3, UnexpectedStructLength(3, len));
 
         (sc.sector, offset) = _readUint64(data, offset);
         (sc.minimumCommitmentEpoch, offset) = _readInt64(data, offset);
@@ -98,7 +109,7 @@ library FVMSectorContentChanged {
     {
         uint256 len;
         (len, offset) = _readArrayHeader(data, offset);
-        require(len == 3, "SCC: expected 3-element PieceChange");
+        require(len == 3, UnexpectedStructLength(3, len));
 
         (pc.data, offset) = _readCid(data, offset); // 0x00 prefix stripped
         (pc.size, offset) = _readUint64(data, offset);
@@ -170,7 +181,7 @@ library FVMSectorContentChanged {
 
         uint256 outerLen;
         (outerLen, offset) = _readArrayHeader(data, offset);
-        require(outerLen == 1, "SCC: expected 1-element outer array");
+        require(outerLen == 1, UnexpectedStructLength(1, outerLen));
 
         uint256 numSectors;
         (numSectors, offset) = _readArrayHeader(data, offset);
@@ -179,7 +190,7 @@ library FVMSectorContentChanged {
             // SectorReturn = [added_array]
             uint256 sectorRetLen;
             (sectorRetLen, offset) = _readArrayHeader(data, offset);
-            require(sectorRetLen == 1, "SCC: expected 1-element SectorReturn");
+            require(sectorRetLen == 1, UnexpectedStructLength(1, sectorRetLen));
 
             uint256 numPieces;
             (numPieces, offset) = _readArrayHeader(data, offset);
@@ -188,10 +199,10 @@ library FVMSectorContentChanged {
                 // PieceReturn = [accepted]
                 uint256 pieceRetLen;
                 (pieceRetLen, offset) = _readArrayHeader(data, offset);
-                require(pieceRetLen == 1, "SCC: expected 1-element PieceReturn");
+                require(pieceRetLen == 1, UnexpectedStructLength(1, pieceRetLen));
 
                 uint8 b = uint8(data[offset++]);
-                require(b == 0xf4 || b == 0xf5, "SCC: expected bool");
+                require(b == 0xf4 || b == 0xf5, InvalidCborBool(b));
                 ret.sectors[i].added[j].accepted = (b == 0xf5);
             }
         }
@@ -248,7 +259,7 @@ library FVMSectorContentChanged {
 
     function _readArrayHeader(bytes memory data, uint256 offset) private pure returns (uint256 len, uint256 newOffset) {
         uint8 b = uint8(data[offset++]);
-        require((b >> 5) == 4, "SCC: expected CBOR array");
+        require((b >> 5) == 4, UnexpectedCborMajorType(4, b >> 5));
         uint8 info = b & 0x1f;
         if (info <= 23) return (uint256(info), offset);
         if (info == 24) return (uint256(uint8(data[offset])), offset + 1);
@@ -256,12 +267,12 @@ library FVMSectorContentChanged {
             len = (uint256(uint8(data[offset])) << 8) | uint256(uint8(data[offset + 1]));
             return (len, offset + 2);
         }
-        revert("SCC: array length too large");
+        revert CborLengthTooLarge();
     }
 
     function _readUint64(bytes memory data, uint256 offset) private pure returns (uint64 v, uint256 newOffset) {
         uint8 b = uint8(data[offset++]);
-        require((b >> 5) == 0, "SCC: expected CBOR uint");
+        require((b >> 5) == 0, UnexpectedCborMajorType(0, b >> 5));
         uint8 info = b & 0x1f;
         if (info <= 23) return (uint64(info), offset);
         if (info == 24) return (uint64(uint8(data[offset])), offset + 1);
@@ -280,7 +291,7 @@ library FVMSectorContentChanged {
             }
             return (v, offset + 8);
         }
-        revert("SCC: uint64 too large");
+        revert CborLengthTooLarge();
     }
 
     function _readInt64(bytes memory data, uint256 offset) private pure returns (int64 v, uint256 newOffset) {
@@ -291,7 +302,7 @@ library FVMSectorContentChanged {
             (u, newOffset) = _readUint64(data, offset);
             return (int64(u), newOffset);
         }
-        require(major == 1, "SCC: expected CBOR int");
+        require(major == 1, UnexpectedCborMajorType(1, major));
         offset++;
         uint8 info = b & 0x1f;
         uint64 n;
@@ -303,7 +314,7 @@ library FVMSectorContentChanged {
             n = (uint64(uint8(data[offset])) << 8) | uint64(uint8(data[offset + 1]));
             offset += 2;
         } else {
-            revert("SCC: int64 too large");
+            revert CborLengthTooLarge();
         }
         return (-1 - int64(n), offset);
     }
@@ -314,7 +325,7 @@ library FVMSectorContentChanged {
         returns (bytes memory result, uint256 newOffset)
     {
         uint8 b = uint8(data[offset++]);
-        require((b >> 5) == 2, "SCC: expected CBOR bytes");
+        require((b >> 5) == 2, UnexpectedCborMajorType(2, b >> 5));
         uint8 info = b & 0x1f;
         uint256 len;
         if (info <= 23) {
@@ -325,7 +336,7 @@ library FVMSectorContentChanged {
             len = (uint256(uint8(data[offset])) << 8) | uint256(uint8(data[offset + 1]));
             offset += 2;
         } else {
-            revert("SCC: bytes too large");
+            revert CborLengthTooLarge();
         }
         result = new bytes(len);
         for (uint256 i = 0; i < len; i++) {
@@ -336,8 +347,7 @@ library FVMSectorContentChanged {
 
     /// @notice Read a CID from CBOR (tag 42 + bytes), stripping the 0x00 multibase prefix
     function _readCid(bytes memory data, uint256 offset) private pure returns (bytes memory cid, uint256 newOffset) {
-        require(uint8(data[offset]) == 0xd8, "SCC: expected CBOR tag");
-        require(uint8(data[offset + 1]) == 0x2a, "SCC: expected tag 42");
+        require(uint8(data[offset]) == 0xd8 && uint8(data[offset + 1]) == 0x2a, InvalidCidTag());
         offset += 2;
         bytes memory raw;
         (raw, newOffset) = _readBytes(data, offset);
