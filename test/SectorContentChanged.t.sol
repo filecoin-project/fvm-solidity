@@ -8,6 +8,7 @@ import {CBOR_CODEC} from "../src/FVMCodec.sol";
 import {SECTOR_CONTENT_CHANGED} from "../src/FVMMethod.sol";
 import {
     FVMSectorContentChanged,
+    CalldataSlice,
     PieceChange,
     PieceChangeIter,
     PieceReturn,
@@ -17,6 +18,77 @@ import {
     SectorContentChangedReturn,
     SectorReturn
 } from "../src/FVMSectorContentChanged.sol";
+
+// CommP CID fixed prefix: CIDv1 / raw codec / sha2-256-trunc254-padded / 36-byte digest
+bytes5 constant COMMP_PREFIX = 0x0155912024;
+
+// =============================================================
+//              BENCHMARK RECEIVER CONTRACTS
+// =============================================================
+
+/// @notice Memory-path benchmark: decodeParams → validate CID prefix → abi.decode payload → encodeReturn
+contract BenchMemoryReceiver {
+    function handle_filecoin_method(uint64, uint64, bytes calldata params)
+        external
+        returns (uint32, uint64, bytes memory)
+    {
+        SectorContentChangedParams memory p = FVMSectorContentChanged.decodeParams(params);
+
+        SectorContentChangedReturn memory ret;
+        ret.sectors = new SectorReturn[](p.sectors.length);
+        for (uint256 i = 0; i < p.sectors.length; i++) {
+            uint256 nPieces = p.sectors[i].added.length;
+            ret.sectors[i].added = new PieceReturn[](nPieces);
+            for (uint256 j = 0; j < nPieces; j++) {
+                bytes memory cid = p.sectors[i].added[j].data;
+                // Validate CommP CID: must be 41 bytes with the fixed 5-byte prefix
+                require(cid.length == 41);
+                bytes5 prefix;
+                assembly ("memory-safe") {
+                    prefix := mload(add(cid, 32))
+                }
+                require(prefix == COMMP_PREFIX);
+                // Decode and validate the allocation ID
+                uint64 allocationId = abi.decode(p.sectors[i].added[j].payload, (uint64));
+                require(allocationId > 0);
+                ret.sectors[i].added[j].accepted = true;
+            }
+        }
+        return (0, CBOR_CODEC, FVMSectorContentChanged.encodeReturn(ret));
+    }
+}
+
+/// @notice Iterator-path benchmark: calldata iterator → validate digest → abi.decode payload → encodeReturn
+contract BenchIteratorReceiver {
+    function handle_filecoin_method(uint64, uint64, bytes calldata)
+        external
+        returns (uint32, uint64, bytes memory)
+    {
+        uint256 numSectors;
+        uint256 off;
+        (numSectors, off) = FVMSectorContentChanged.readParamsHeader();
+
+        SectorContentChangedReturn memory ret;
+        ret.sectors = new SectorReturn[](numSectors);
+        for (uint256 i = 0; i < numSectors; i++) {
+            SectorChangesHeader memory header;
+            (header, off) = FVMSectorContentChanged.readSectorHeader(off);
+            ret.sectors[i].added = new PieceReturn[](header.numPieces);
+            for (uint256 j = 0; j < header.numPieces; j++) {
+                PieceChangeIter memory piece;
+                (piece, off) = FVMSectorContentChanged.readPiece(off);
+                // Materialise and validate: CID prefix was already stripped, so digest is 36 bytes
+                bytes memory digest = FVMSectorContentChanged.loadSlice(piece.digest);
+                require(digest.length == 36);
+                // Decode and validate the allocation ID
+                uint64 allocationId = abi.decode(FVMSectorContentChanged.loadSlice(piece.payload), (uint64));
+                require(allocationId > 0);
+                ret.sectors[i].added[j].accepted = true;
+            }
+        }
+        return (0, CBOR_CODEC, FVMSectorContentChanged.encodeReturn(ret));
+    }
+}
 
 // =============================================================
 //          CALLDATA ITERATOR RECEIVER CONTRACT
@@ -113,6 +185,8 @@ contract SectorContentChangedTest is MockFVMTest {
 
     SectorContentChangedReceiver receiver;
     IteratorReceiver iterReceiver;
+    BenchMemoryReceiver benchMemory;
+    BenchIteratorReceiver benchIterator;
 
     // CommP CID (41 bytes): CIDv1 / raw / sha2-256-trunc254-padded / 36-byte digest
     bytes constant COMMP_CID = hex"0155912024cdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b367a49ce18";
@@ -125,6 +199,8 @@ contract SectorContentChangedTest is MockFVMTest {
         super.setUp();
         receiver = new SectorContentChangedReceiver();
         iterReceiver = new IteratorReceiver();
+        benchMemory = new BenchMemoryReceiver();
+        benchIterator = new BenchIteratorReceiver();
     }
 
     // -------------------------
@@ -310,5 +386,41 @@ contract SectorContentChangedTest is MockFVMTest {
         assertEq(iterReceiver.lastSector(), 20);
         assertEq(iterReceiver.lastDigest(), COMMP_DIGEST2);
         assertEq(iterReceiver.lastPayload(), hex"cafe");
+    }
+
+    // -------------------------
+    // Gas benchmarks (3 sectors × 3 pieces, CommP CIDs, abi.encoded allocation IDs)
+    // -------------------------
+
+    function _buildBenchParams() internal pure returns (SectorContentChangedParams memory) {
+        SectorChanges[] memory sectors = new SectorChanges[](3);
+        uint64 allocId = 1;
+        bytes[2] memory cids = [COMMP_CID, COMMP_CID2];
+        for (uint256 i = 0; i < 3; i++) {
+            PieceChange[] memory pieces = new PieceChange[](3);
+            for (uint256 j = 0; j < 3; j++) {
+                pieces[j] = PieceChange({
+                    data: cids[(i + j) % 2],
+                    size: uint64(2048 << j),
+                    payload: abi.encode(allocId++)
+                });
+            }
+            sectors[i] = SectorChanges({
+                sector: uint64(100 + i * 100),
+                minimumCommitmentEpoch: int64(int256(i) * 1000),
+                added: pieces
+            });
+        }
+        return SectorContentChangedParams({sectors: sectors});
+    }
+
+    function testGasBenchMemoryPath() public {
+        FVMMinerActor miner = mockMiner(9001);
+        miner.callSectorContentChanged(address(benchMemory), _buildBenchParams());
+    }
+
+    function testGasBenchIteratorPath() public {
+        FVMMinerActor miner = mockMiner(9002);
+        miner.callSectorContentChanged(address(benchIterator), _buildBenchParams());
     }
 }
