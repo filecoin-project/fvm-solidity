@@ -247,7 +247,9 @@ contract SectorContentChangedTest is MockFVMTest {
                     PieceChange({data: cids[(i + j) % 2], size: uint64(2048 << j), payload: abi.encode(allocId++)});
             }
             sectors[i] = SectorChanges({
-                sector: uint64(100 + i * 100), minimumCommitmentEpoch: int64(int256(i) * 1000), added: pieces
+                sector: uint64(100 + i * 100),
+                minimumCommitmentEpoch: int64(int256(i) * 1000),
+                added: pieces
             });
         }
         return SectorContentChangedParams({sectors: sectors});
@@ -266,7 +268,9 @@ contract SectorContentChangedTest is MockFVMTest {
                     PieceChange({data: cids[j % 2], size: uint64(2048 << (j % 8)), payload: abi.encode(allocId++)});
             }
             sectors[i] = SectorChanges({
-                sector: uint64(100 + i * 100), minimumCommitmentEpoch: int64(int256(i) * 1000), added: pieces
+                sector: uint64(100 + i * 100),
+                minimumCommitmentEpoch: int64(int256(i) * 1000),
+                added: pieces
             });
         }
         return SectorContentChangedParams({sectors: sectors});

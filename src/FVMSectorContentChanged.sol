@@ -160,10 +160,9 @@ library FVMSectorContentChanged {
         for (uint256 i = 0; i < sc.added.length; i++) {
             addedArr = abi.encodePacked(addedArr, _encodePieceChange(sc.added[i]));
         }
-        return
-            abi.encodePacked(
-                _cborArrayHeader(3), _cborUint64(sc.sector), _cborInt64(sc.minimumCommitmentEpoch), addedArr
-            );
+        return abi.encodePacked(
+            _cborArrayHeader(3), _cborUint64(sc.sector), _cborInt64(sc.minimumCommitmentEpoch), addedArr
+        );
     }
 
     function _encodePieceChange(PieceChange memory pc) private pure returns (bytes memory) {
@@ -511,7 +510,11 @@ library FVMSectorContentChanged {
     //                  CBOR READ PRIMITIVES
     // =========================================================
 
-    function _readArrayHeader(bytes memory data, uint256 offset) private pure returns (uint256 len, uint256 newOffset) {
+    function _readArrayHeader(bytes memory data, uint256 offset)
+        private
+        pure
+        returns (uint256 len, uint256 newOffset)
+    {
         uint8 b = uint8(data[offset++]);
         require((b >> 5) == 4, UnexpectedCborMajorType(4, b >> 5));
         uint8 info = b & 0x1f;

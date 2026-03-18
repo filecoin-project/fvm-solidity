@@ -23,5 +23,5 @@ remappings = [
 exclude_lints = [
     "incorrect-shift",
     "mixed-case-function",
-    "unsafe-typecast",
+    #"unsafe-typecast",
 ]
