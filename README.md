@@ -64,12 +64,12 @@ contract BigBrain {
 Look up the delegated (f4 / f410) address associated with an actor ID on the FEVM.
 
 ```solidity
-import { FVMActor } from "fvm-solidity/FVMActor.sol";
+import {FVMActor} from "fvm-solidity/FVMActor.sol";
 
 contract BigBrain {
     using FVMActor for uint64;
 
-    // Try lookup without reverting
+    // Try lookup without reverting (EVM address)
     function tryLookup(uint64 actorId) external view returns (bool exists, address addr) {
         return actorId.tryLookupDelegatedAddress();
     }
@@ -78,19 +78,8 @@ contract BigBrain {
     function lookup(uint64 actorId) external view returns (address) {
         return actorId.lookupDelegatedAddress();
     }
-}
-```
 
-#### Raw delegated address bytes
-
-If you need the raw f4 / f410 encoded address:
-
-```solidity
-import {FVMActor} from "fvm-solidity/FVMActor.sol";
-
-contract BigBrain {
-    using FVMActor for uint64;
-
+    // Raw f4 / f410 encoded address bytes
     function tryLookupBytes(uint64 actorId) external view returns (bool exists, bytes memory delegated) {
         return actorId.tryLookupDelegatedAddressBytes();
     }

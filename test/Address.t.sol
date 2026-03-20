@@ -5,14 +5,14 @@ import {Test} from "forge-std/Test.sol";
 import {FVMAddress} from "../src/FVMAddress.sol";
 
 contract FVMAddressTest is Test {
+    // =============================================================
+    //                     toEthAddress TESTS
+    // =============================================================
+
     // Helper — lets vm.expectRevert work on a pure function
     function _toEthAddress(bytes memory delegated) public pure returns (address) {
         return FVMAddress.toEthAddress(delegated);
     }
-
-    // =============================================================
-    //                     toEthAddress TESTS
-    // =============================================================
 
     function testToEthAddressSuccess() public pure {
         address expected = address(0x1234567890123456789012345678901234567890);
