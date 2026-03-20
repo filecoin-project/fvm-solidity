@@ -3,9 +3,10 @@ pragma solidity ^0.8.30;
 
 import {BURN_ACTOR_ID, BURN_ADDRESS, STORAGE_POWER_ACTOR_ID} from "../FVMActors.sol";
 import {CBOR_CODEC, EMPTY_CODEC} from "../FVMCodec.sol";
-import {EXIT_SUCCESS, INSUFFICIENT_FUNDS, NOT_FOUND, USR_NOT_FOUND} from "../FVMErrors.sol";
+import {EXIT_SUCCESS, INSUFFICIENT_FUNDS, NOT_FOUND, USR_NOT_FOUND, USR_ILLEGAL_ARGUMENT} from "../FVMErrors.sol";
 import {NO_FLAGS, READONLY_FLAG} from "../FVMFlags.sol";
 import {SEND, MINER_POWER} from "../FVMMethod.sol";
+import {FVMAddress} from "../FVMAddress.sol";
 
 contract FVMCallActorById {
     /// @notice Registry of mock miner actor IDs for PowerAPI verification
@@ -24,6 +25,8 @@ contract FVMCallActorById {
             _handleBurn(method, value, flags, codec, params);
         } else if (actorId == STORAGE_POWER_ACTOR_ID) {
             _handlePower(method, flags, codec, params);
+        } else if (mockMiners[actorId]) {
+            _handleMiner(actorId, method, value, flags, codec, params);
         } else {
             // Unknown actor: no actor at this ID in our mock state.
             // Matches real FVM: send_raw returns ErrorNumber::NotFound → negative exit code, success=true.
@@ -81,6 +84,28 @@ contract FVMCallActorById {
         }
         assembly ("memory-safe") {
             return(add(response, 0x20), mload(response))
+        }
+    }
+
+    /// @notice Forward a call to the mock miner at its masked ID address via handle_filecoin_method.
+    /// @dev Matching real FVM behaviour: actor errors are returned as non-zero exit codes, not reverts.
+    ///      If the miner reverts (e.g. catastrophic CBOR parse failure), convert to USR_ILLEGAL_ARGUMENT.
+    function _handleMiner(uint64 actorId, uint64 method, uint256, uint64 flags, uint64 codec, bytes memory params)
+        internal
+    {
+        require(flags == READONLY_FLAG || flags == NO_FLAGS, "FVMCallActorById: invalid flags");
+        address minerAddr = FVMAddress.maskedAddress(actorId);
+        (bool success, bytes memory ret) = minerAddr.call(
+            abi.encodeWithSignature("handle_filecoin_method(uint64,uint64,bytes)", method, codec, params)
+        );
+        if (!success) {
+            bytes memory errResponse = abi.encode(uint32(USR_ILLEGAL_ARGUMENT), uint64(0), bytes(""));
+            assembly ("memory-safe") {
+                return(add(errResponse, 0x20), mload(errResponse))
+            }
+        }
+        assembly ("memory-safe") {
+            return(add(ret, 0x20), mload(ret))
         }
     }
 
