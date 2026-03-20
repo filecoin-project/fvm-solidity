@@ -2,6 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {CBOR_CODEC} from "../FVMCodec.sol";
+import {USR_UNHANDLED_MESSAGE} from "../FVMErrors.sol";
 import {SECTOR_CONTENT_CHANGED} from "../FVMMethod.sol";
 import {
     FVMSectorContentChanged,
@@ -14,6 +15,16 @@ import {
 /// via MockFVMTest.mockMiner(actorId). When it calls handle_filecoin_method on the target,
 /// msg.sender will be the masked ID address, passing the receiver's isMinerActor() check.
 contract FVMMinerActor {
+    /// @notice Fallback for unknown ABI selectors.
+    /// @dev The real miner is a native actor: it returns USR_UNHANDLED_MESSAGE for InvokeContract
+    ///      (the method the EVM CALL opcode uses) rather than reverting.
+    fallback() external {
+        bytes memory response = abi.encode(uint32(USR_UNHANDLED_MESSAGE), uint64(0), bytes(""));
+        assembly ("memory-safe") {
+            return(add(response, 0x20), mload(response))
+        }
+    }
+
     /// @notice Simulate the miner actor calling handle_filecoin_method on the target contract
     /// @param target The contract implementing handle_filecoin_method
     /// @param params The notification parameters

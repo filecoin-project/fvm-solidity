@@ -4,12 +4,14 @@ pragma solidity ^0.8.30;
 import {Test} from "forge-std/Test.sol";
 
 import {CALL_ACTOR_BY_ADDRESS, CALL_ACTOR_BY_ID, GET_BEACON_RANDOMNESS, RESOLVE_ADDRESS} from "../FVMPrecompiles.sol";
+import {STORAGE_POWER_ACTOR_ADDRESS} from "../FVMActors.sol";
 import {FVMAddress} from "../FVMAddress.sol";
 import {FVMCallActorByAddress} from "./FVMCallActorByAddress.sol";
 import {FVMCallActorById} from "./FVMCallActorById.sol";
 import {FVMGetBeaconRandomness} from "./FVMGetBeaconRandomness.sol";
 import {FVMActor} from "./FVMActor.sol";
 import {FVMMinerActor} from "./FVMMinerActor.sol";
+import {FVMStoragePowerActor} from "./FVMStoragePowerActor.sol";
 
 /// @notice Mocks the FVM precompiles for forge test
 contract MockFVMTest is Test {
@@ -23,6 +25,7 @@ contract MockFVMTest is Test {
         vm.etch(CALL_ACTOR_BY_ADDRESS, address(new FVMCallActorByAddress()).code);
         vm.etch(CALL_ACTOR_BY_ID, address(new FVMCallActorById()).code);
         vm.etch(GET_BEACON_RANDOMNESS, address(new FVMGetBeaconRandomness()).code);
+        vm.etch(STORAGE_POWER_ACTOR_ADDRESS, address(new FVMStoragePowerActor()).code);
 
         address deployed = address(new FVMActor());
         vm.etch(RESOLVE_ADDRESS, deployed.code);

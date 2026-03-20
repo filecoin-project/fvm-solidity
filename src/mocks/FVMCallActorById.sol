@@ -3,7 +3,7 @@ pragma solidity ^0.8.30;
 
 import {BURN_ACTOR_ID, BURN_ADDRESS, STORAGE_POWER_ACTOR_ID} from "../FVMActors.sol";
 import {CBOR_CODEC, EMPTY_CODEC} from "../FVMCodec.sol";
-import {EXIT_SUCCESS, INSUFFICIENT_FUNDS, NOT_FOUND} from "../FVMErrors.sol";
+import {EXIT_SUCCESS, INSUFFICIENT_FUNDS, NOT_FOUND, USR_NOT_FOUND} from "../FVMErrors.sol";
 import {NO_FLAGS, READONLY_FLAG} from "../FVMFlags.sol";
 import {SEND, MINER_POWER} from "../FVMMethod.sol";
 
@@ -25,7 +25,12 @@ contract FVMCallActorById {
         } else if (actorId == STORAGE_POWER_ACTOR_ID) {
             _handlePower(method, flags, codec, params);
         } else {
-            revert("FVMCallActorById: unsupported actor");
+            // Unknown actor: no actor at this ID in our mock state.
+            // Matches real FVM: send_raw returns ErrorNumber::NotFound → negative exit code, success=true.
+            bytes memory response = abi.encode(NOT_FOUND, uint64(0), bytes(""));
+            assembly ("memory-safe") {
+                return(add(response, 0x20), mload(response))
+            }
         }
     }
 
@@ -71,7 +76,8 @@ contract FVMCallActorById {
             );
             response = abi.encode(EXIT_SUCCESS, CBOR_CODEC, retCbor);
         } else {
-            response = abi.encode(NOT_FOUND, EMPTY_CODEC, bytes(""));
+            // Power actor returns actor_error!(not_found) → USR_NOT_FOUND (+14), not a syscall error.
+            response = abi.encode(int256(uint256(USR_NOT_FOUND)), EMPTY_CODEC, bytes(""));
         }
         assembly ("memory-safe") {
             return(add(response, 0x20), mload(response))
