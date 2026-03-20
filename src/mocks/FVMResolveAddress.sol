@@ -15,7 +15,7 @@ import {
 } from "../FVMActors.sol";
 import {FVMAddress} from "../FVMAddress.sol";
 
-contract FVMActor {
+contract FVMResolveAddress {
     using FVMAddress for uint64;
 
     /// @dev keccak256 of f0(0) = keccak256(hex"0000") — protocol byte 0x00 + ULEB128(0) = 0x00
@@ -38,13 +38,7 @@ contract FVMActor {
         _mockf0(BURN_ACTOR_ID);
     }
 
-    /**
-     * @notice Mocks an ID-based address (f0)
-     * @dev NOTE: This simple encoding only works for actorId <= 127.
-     * Filecoin uses LEB128 Varint encoding for ID addresses. For values <= 127,
-     * the Varint is a single byte. For values > 127, the Varint expands to
-     * multiple bytes, and this 2-byte packing [0x00, id] would be invalid.
-     */
+    /// @notice Mocks an ID-based address (f0) using full LEB128 encoding
     function _mockf0(uint64 actorId) internal {
         // Protocol 0 address = protocol byte (0x00) + actor ID
         bytes memory filAddress = actorId.f0();
@@ -67,6 +61,7 @@ contract FVMActor {
     }
 
     fallback() external {
+        // ---- resolveAddress ----
         bytes memory filAddress = msg.data;
 
         // Basic validation:  address must be non-empty

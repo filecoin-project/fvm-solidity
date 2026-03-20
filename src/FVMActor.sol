@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
-import {RESOLVE_ADDRESS} from "./FVMPrecompiles.sol";
+import {RESOLVE_ADDRESS, LOOKUP_DELEGATED_ADDRESS} from "./FVMPrecompiles.sol";
 import {FVMAddress} from "./FVMAddress.sol";
 
 library FVMActor {
     error ActorNotFound(bytes filAddress);
     error EVMActorNotFound(address addr);
+    error DelegatedAddressNotFound(uint64 actorId);
 
     /// @dev Prefix for masked ID addresses: 0xff followed by 11 zero bytes (top 96 bits of address)
     uint160 private constant MASKED_ID_PREFIX = 0xff0000000000000000000000;
@@ -98,5 +99,83 @@ library FVMActor {
         bool exists;
         (exists, actorId) = tryGetActorId(addr);
         require(exists, EVMActorNotFound(addr));
+    }
+
+    // =============================================================
+    //            DELEGATED ADDRESS LOOKUP IMPLEMENTATION
+    // =============================================================
+
+    /// @notice Tries to look up the delegated address of an actor by ID as an EVM address
+    /// @dev Returns exists=false if actor doesn't exist or has no delegated address.
+    ///      Reverts with InvalidDelegatedAddress if the actor's delegated address is not f410.
+    /// @param actorId The actor ID (uint64)
+    /// @return exists Whether the delegated address exists
+    /// @return ethAddress The EVM address, valid only if exists is true
+    function tryLookupDelegatedAddress(uint64 actorId) internal view returns (bool exists, address ethAddress) {
+        bytes memory delegatedAddress;
+        (exists, delegatedAddress) = tryLookupDelegatedAddressBytes(actorId);
+        if (exists) {
+            ethAddress = FVMAddress.toEthAddress(delegatedAddress);
+        }
+    }
+
+    /// @notice Looks up the delegated address as an EVM address, requiring it exists
+    /// @dev Reverts if the actor has no delegated address or if it is not an f410 address.
+    /// @param actorId The actor ID (uint64)
+    /// @return ethAddress The EVM address
+    function lookupDelegatedAddress(uint64 actorId) internal view returns (address ethAddress) {
+        bool exists;
+        (exists, ethAddress) = tryLookupDelegatedAddress(actorId);
+        if (!exists) revert DelegatedAddressNotFound(actorId);
+    }
+
+    /// @notice Tries to look up the delegated address of an actor by ID as raw bytes
+    /// @dev Returns empty bytes and exists=false if actor doesn't exist or has no delegated address
+    /// @param actorId The actor ID (uint64)
+    /// @return exists Whether the delegated address exists
+    /// @return delegatedAddress The delegated address as raw bytes
+    function tryLookupDelegatedAddressBytes(uint64 actorId)
+        internal
+        view
+        returns (bool exists, bytes memory delegatedAddress)
+    {
+        assembly ("memory-safe") {
+            // Default to zero slot (0x60): always zero, represents empty bytes without allocation
+            delegatedAddress := 0x60
+
+            let fmp := mload(0x40)
+
+            // Encode actorId as ABI uint256
+            mstore(fmp, actorId)
+
+            // Call precompile
+            let success := staticcall(gas(), LOOKUP_DELEGATED_ADDRESS, fmp, 32, 0, 0)
+
+            if iszero(success) {
+                returndatacopy(0, 0, returndatasize())
+                revert(0, returndatasize())
+            }
+
+            if returndatasize() {
+                exists := 1
+                delegatedAddress := fmp // Overwrite actorId input slot (saves 32 bytes)
+
+                mstore(delegatedAddress, returndatasize())
+                returndatacopy(add(delegatedAddress, 0x20), 0, returndatasize())
+
+                // Update free memory pointer (round up to 32 bytes)
+                mstore(0x40, add(add(delegatedAddress, 0x20), and(add(returndatasize(), 0x1f), not(0x1f))))
+            }
+        }
+    }
+
+    /// @notice Looks up the delegated address as raw bytes, requiring it exists
+    /// @dev Reverts if the actor has no delegated address
+    /// @param actorId The actor ID (uint64)
+    /// @return delegatedAddress The delegated address as raw bytes
+    function lookupDelegatedAddressBytes(uint64 actorId) internal view returns (bytes memory delegatedAddress) {
+        bool exists;
+        (exists, delegatedAddress) = tryLookupDelegatedAddressBytes(actorId);
+        if (!exists) revert DelegatedAddressNotFound(actorId);
     }
 }
