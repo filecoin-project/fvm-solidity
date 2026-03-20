@@ -5,6 +5,8 @@ pragma solidity ^0.8.30;
 
 int256 constant EXIT_SUCCESS = 0;
 
+// Syscall error numbers (negative exit codes, ErrorNumber in ref-fvm)
+
 // @dev A syscall parameters was invalid.
 int256 constant ILLEGAL_ARGUMENT = -1;
 // @dev The actor is not in the correct state to perform the requested operation.
@@ -31,3 +33,9 @@ int256 constant FORBIDDEN = -11;
 int256 constant BUFFER_TOO_SMALL = -12;
 // @dev The actor is executing in a read-only context.
 int256 constant READ_ONLY = -13;
+
+// Actor user exit codes (positive, ExitCode in fvm_shared::error)
+// See https://docs.rs/fvm_shared/latest/fvm_shared/error/struct.ExitCode.html
+uint32 constant USR_NOT_FOUND = 14;
+uint32 constant USR_ILLEGAL_ARGUMENT = 16;
+uint32 constant USR_UNHANDLED_MESSAGE = 22;
