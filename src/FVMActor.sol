@@ -150,22 +150,21 @@ library FVMActor {
 
             // Call precompile
             let success := staticcall(gas(), LOOKUP_DELEGATED_ADDRESS, fmp, 32, 0, 0)
-            let returnSize := returndatasize()
 
             if iszero(success) {
-                returndatacopy(0, 0, returnSize)
-                revert(0, returnSize)
+                returndatacopy(0, 0, returndatasize())
+                revert(0, returndatasize())
             }
 
-            if returnSize {
+            if returndatasize() {
                 exists := 1
-                delegatedAddress := add(fmp, 32) // Place delegated address after the input
+                delegatedAddress := fmp // Overwrite actorId input slot (saves 32 bytes)
 
-                mstore(delegatedAddress, returnSize)
-                returndatacopy(add(delegatedAddress, 0x20), 0, returnSize)
+                mstore(delegatedAddress, returndatasize())
+                returndatacopy(add(delegatedAddress, 0x20), 0, returndatasize())
 
                 // Update free memory pointer (round up to 32 bytes)
-                mstore(0x40, add(add(delegatedAddress, 0x20), and(add(returnSize, 0x1f), not(0x1f))))
+                mstore(0x40, add(add(delegatedAddress, 0x20), and(add(returndatasize(), 0x1f), not(0x1f))))
             }
         }
     }
