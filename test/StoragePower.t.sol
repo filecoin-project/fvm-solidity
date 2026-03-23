@@ -38,7 +38,7 @@ contract StoragePowerTest is MockFVMTest {
         assertEq(exitCode, 0);
     }
 
-    // Unregistered miner: power actor returns actor_error!(not_found) → USR_NOT_FOUND (+14)
+    // Unregistered miner: power actor returns actor_error!(not_found) → USR_NOT_FOUND (+17)
     function testPowerAPI_UnregisteredMiner_ReturnsNotFound() public {
         (bool success, bytes memory ret) = _callPower(MINER_ID, READONLY_FLAG);
         assertTrue(success);
