@@ -76,7 +76,7 @@ contract FVMCallActorById {
             );
             response = abi.encode(EXIT_SUCCESS, CBOR_CODEC, retCbor);
         } else {
-            // Power actor returns actor_error!(not_found) → USR_NOT_FOUND (+14), not a syscall error.
+            // Power actor returns actor_error!(not_found) → USR_NOT_FOUND (+17), not a syscall error.
             response = abi.encode(int256(uint256(USR_NOT_FOUND)), EMPTY_CODEC, bytes(""));
         }
         assembly ("memory-safe") {
