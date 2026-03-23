@@ -4,6 +4,10 @@ pragma solidity ^0.8.30;
 uint64 constant SEND = 0;
 uint64 constant CONSTRUCT = 1;
 
+// Lowest method number callable by user actors (FRC-0042 / restrict_internal_api threshold).
+// Methods 1–(FIRST_EXPORTED_METHOD_NUMBER-1) are reserved for built-in callers only.
+uint64 constant FIRST_EXPORTED_METHOD_NUMBER = 1 << 24; // 16777216
+
 // Storage power actor methods
 uint64 constant MINER_POWER = 36284446;
 

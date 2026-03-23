@@ -3,9 +3,16 @@ pragma solidity ^0.8.30;
 
 import {BURN_ACTOR_ID, BURN_ADDRESS, STORAGE_POWER_ACTOR_ID} from "../FVMActors.sol";
 import {CBOR_CODEC, EMPTY_CODEC} from "../FVMCodec.sol";
-import {EXIT_SUCCESS, INSUFFICIENT_FUNDS, NOT_FOUND, USR_NOT_FOUND} from "../FVMErrors.sol";
+import {
+    EXIT_SUCCESS,
+    INSUFFICIENT_FUNDS,
+    NOT_FOUND,
+    READ_ONLY,
+    USR_NOT_FOUND,
+    USR_UNHANDLED_MESSAGE
+} from "../FVMErrors.sol";
 import {NO_FLAGS, READONLY_FLAG} from "../FVMFlags.sol";
-import {SEND, MINER_POWER} from "../FVMMethod.sol";
+import {SEND, MINER_POWER, FIRST_EXPORTED_METHOD_NUMBER} from "../FVMMethod.sol";
 
 contract FVMCallActorById {
     /// @notice Registry of mock miner actor IDs for PowerAPI verification
@@ -35,17 +42,53 @@ contract FVMCallActorById {
     }
 
     function _handleBurn(uint64 method, uint256 value, uint64 flags, uint64 codec, bytes memory params) internal {
-        require(method == SEND, "FVMCallActorById: Only method 0 (send) supported");
-        require(flags == NO_FLAGS, "FVMCallActorById: Only non-readonly calls supported");
-        require(codec == EMPTY_CODEC, "FVMCallActorById: Only no-codec calls supported");
-        require(params.length == 0, "FVMCallActorById: No params expected");
+        // Invalid flag bits: precompile only accepts READONLY_FLAG (bit 0); unknown bits → PrecompileError.
+        if (flags & ~READONLY_FLAG != 0) {
+            assembly ("memory-safe") {
+                revert(0, 0)
+            }
+        }
 
-        (bool success,) = BURN_ADDRESS.call{value: value}("");
-        bytes memory response = success
+        // Methods 1–1023 are blocked by the precompile (EVM_MAX_RESERVED_METHOD=1023); method 0 is SEND.
+        if (method != SEND && method <= 1023) {
+            assembly ("memory-safe") {
+                revert(0, 0)
+            }
+        }
+
+        // Codec must be CBOR or (empty codec with no params); anything else → PrecompileError.
+        if (codec != CBOR_CODEC && (codec != EMPTY_CODEC || params.length != 0)) {
+            assembly ("memory-safe") {
+                revert(0, 0)
+            }
+        }
+
+        // Read-only + non-zero value: kernel rejects before invoking the actor.
+        if (flags == READONLY_FLAG && value > 0) {
+            bytes memory response = abi.encode(READ_ONLY, EMPTY_CODEC, bytes(""));
+            assembly ("memory-safe") {
+                return(add(response, 0x20), mload(response))
+            }
+        }
+
+        // Non-SEND methods >1023: dispatch to account actor fallback.
+        // method < FIRST_EXPORTED_METHOD_NUMBER → USR_UNHANDLED_MESSAGE; else → exit 0.
+        if (method != SEND) {
+            bytes memory response = method >= FIRST_EXPORTED_METHOD_NUMBER
+                ? abi.encode(EXIT_SUCCESS, EMPTY_CODEC, bytes(""))
+                : abi.encode(int256(uint256(USR_UNHANDLED_MESSAGE)), EMPTY_CODEC, bytes(""));
+            assembly ("memory-safe") {
+                return(add(response, 0x20), mload(response))
+            }
+        }
+
+        // SEND: transfer value. FVM ignores params for method 0.
+        (bool ok,) = BURN_ADDRESS.call{value: value}("");
+        bytes memory resp = ok
             ? abi.encode(EXIT_SUCCESS, EMPTY_CODEC, bytes(""))
             : abi.encode(INSUFFICIENT_FUNDS, EMPTY_CODEC, bytes(""));
         assembly ("memory-safe") {
-            return(add(response, 0x20), mload(response))
+            return(add(resp, 0x20), mload(resp))
         }
     }
 
