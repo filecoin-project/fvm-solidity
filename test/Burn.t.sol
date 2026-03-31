@@ -3,10 +3,10 @@ pragma solidity ^0.8.30;
 
 import {MockFVMTest} from "../src/mocks/MockFVMTest.sol";
 import {BURN_ACTOR_ID, BURN_ADDRESS} from "../src/FVMActors.sol";
-import {CBOR_CODEC, EMPTY_CODEC, RAW_CODEC} from "../src/FVMCodec.sol";
+import {EMPTY_CODEC, RAW_CODEC} from "../src/FVMCodec.sol";
 import {READ_ONLY, USR_UNHANDLED_MESSAGE} from "../src/FVMErrors.sol";
 import {NO_FLAGS, READONLY_FLAG} from "../src/FVMFlags.sol";
-import {SEND, FIRST_EXPORTED_METHOD_NUMBER, INVOKE_EVM} from "../src/FVMMethod.sol";
+import {SEND, INVOKE_EVM} from "../src/FVMMethod.sol";
 import {CALL_ACTOR_BY_ID} from "../src/FVMPrecompiles.sol";
 import {FVMPay} from "../src/FVMPay.sol";
 
