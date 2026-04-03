@@ -125,18 +125,43 @@ contract ValidateSectorStatusTest is MockFVMTest {
         assertEq(_exitCode(SECTOR, SectorStatus.Active, DEADLINE, PARTITION), int256(uint256(USR_NOT_FOUND)));
     }
 
-    // Active sector + (NO_DEADLINE, NO_PARTITION): cannot determine status without a location
-    function testActiveSector_NoLocation_ReturnsNotFound() public {
+    // Sector in AMT (Active) + (NO_DEADLINE, NO_PARTITION): errors for any requested status.
+    // Note: FIP says Active/Faulty "trivially return false" here, but builtin-actors returns
+    // USR_NOT_FOUND for all three statuses when the sector exists in the AMT. We follow builtin-actors.
+    function testActiveSector_NoLocation_RequestActive_ReturnsNotFound() public {
         miner.mockSectorStatus(SECTOR, SectorStatus.Active);
         miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
         assertEq(_exitCode(SECTOR, SectorStatus.Active, NO_DEADLINE, NO_PARTITION), int256(uint256(USR_NOT_FOUND)));
     }
 
-    // Faulty sector + (NO_DEADLINE, NO_PARTITION): likewise an error
+    function testActiveSector_NoLocation_RequestFaulty_ReturnsNotFound() public {
+        miner.mockSectorStatus(SECTOR, SectorStatus.Active);
+        miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
+        assertEq(_exitCode(SECTOR, SectorStatus.Faulty, NO_DEADLINE, NO_PARTITION), int256(uint256(USR_NOT_FOUND)));
+    }
+
+    function testActiveSector_NoLocation_RequestDead_ReturnsNotFound() public {
+        miner.mockSectorStatus(SECTOR, SectorStatus.Active);
+        miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
+        assertEq(_exitCode(SECTOR, SectorStatus.Dead, NO_DEADLINE, NO_PARTITION), int256(uint256(USR_NOT_FOUND)));
+    }
+
+    // Faulty sector + (NO_DEADLINE, NO_PARTITION): likewise errors for any requested status
     function testFaultySector_NoLocation_ReturnsNotFound() public {
         miner.mockSectorStatus(SECTOR, SectorStatus.Faulty);
         miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
         assertEq(_exitCode(SECTOR, SectorStatus.Faulty, NO_DEADLINE, NO_PARTITION), int256(uint256(USR_NOT_FOUND)));
+    }
+
+    // Sector absent from AMT (Dead/never committed) + (NO_DEADLINE, NO_PARTITION):
+    // returns false (not error) for Active/Faulty requests — sector trivially cannot be Active or Faulty
+    // without a location. This matches builtin-actors validate_at_no_location_for_nonexistent_sector.
+    function testDeadSector_NoLocation_RequestActive_False() public {
+        assertFalse(_validate(SECTOR, SectorStatus.Active, NO_DEADLINE, NO_PARTITION));
+    }
+
+    function testDeadSector_NoLocation_RequestFaulty_False() public {
+        assertFalse(_validate(SECTOR, SectorStatus.Faulty, NO_DEADLINE, NO_PARTITION));
     }
 
     // Mixing NO and non-NO is always an illegal argument
