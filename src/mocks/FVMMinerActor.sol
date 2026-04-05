@@ -9,14 +9,7 @@ import {
     SectorContentChangedParams,
     SectorContentChangedReturn
 } from "../FVMSectorContentChanged.sol";
-
-/// @notice FIP-0112 sector status codes. Matches builtin-actors SectorStatusCode wire order (Dead=0).
-enum SectorStatus {
-    Dead, // 0 – terminated or never committed
-    Active, // 1 – not terminated, not faulty
-    Faulty // 2 – live but currently faulty
-
-}
+import {SectorStatus, NO_DEADLINE, NO_PARTITION} from "../FVMSector.sol";
 
 /// @notice FIP-0112 sector location: deadline and partition indices within the miner state.
 ///         NO_DEADLINE / NO_PARTITION (-1) signals the sector is absent from the AMT (compacted).
@@ -24,9 +17,6 @@ struct SectorLocation {
     int64 deadline;
     int64 partition;
 }
-
-int64 constant NO_DEADLINE = -1;
-int64 constant NO_PARTITION = -1;
 
 /// @notice Mock miner actor for testing FIP-0109 SectorContentChanged notifications
 /// @dev Etch this contract's code at a miner's masked ID address (0xff + 11 zeros + actorId)
