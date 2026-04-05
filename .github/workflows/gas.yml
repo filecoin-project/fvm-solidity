@@ -26,7 +26,8 @@ jobs:
 
       - name: Check for uncommitted changes
         run: |
-          git diff --exit-code gas/ || {
+          git add gas/
+          git diff --cached --exit-code gas/ || {
             echo "Gas snapshots are out of date. Run 'make test' locally and commit the updated gas/ files."
             exit 1
           }
