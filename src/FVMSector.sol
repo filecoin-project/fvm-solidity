@@ -4,14 +4,10 @@ pragma solidity ^0.8.30;
 import {CBOR_CODEC} from "./FVMCodec.sol";
 import {EXIT_SUCCESS} from "./FVMErrors.sol";
 import {READONLY_FLAG} from "./FVMFlags.sol";
-import {VALIDATE_SECTOR_STATUS} from "./FVMMethod.sol";
+import {VALIDATE_SECTOR_STATUS, GET_NOMINAL_SECTOR_EXPIRATION} from "./FVMMethod.sol";
 import {CALL_ACTOR_BY_ID} from "./FVMPrecompiles.sol";
 
-// =============================================================
-//                          TYPES
-// =============================================================
-
-/// @notice FIP-0112 sector status codes. Matches builtin-actors SectorStatusCode wire order (Dead=0).
+/// @notice FIP-0112 SectorStatusCode
 enum SectorStatus {
     Dead, // 0 — terminated or never committed
     Active, // 1 — not terminated, not faulty
@@ -23,13 +19,11 @@ enum SectorStatus {
 int64 constant NO_DEADLINE = -1;
 int64 constant NO_PARTITION = -1;
 
-// =============================================================
-//                          LIBRARY
-// =============================================================
-
 library FVMSector {
     /// @dev The miner actor returned a non-zero exit code for ValidateSectorStatus.
     error ValidateSectorStatusFailed(int256 exitCode);
+    /// @dev The miner actor returned a non-zero exit code for GetNominalSectorExpiration.
+    error GetNominalSectorExpirationFailed(int256 exitCode);
 
     /// @notice Calls ValidateSectorStatus on a miner actor without reverting on actor error.
     /// @param minerId The miner actor ID
@@ -68,30 +62,37 @@ library FVMSector {
         require(exitCode == EXIT_SUCCESS, ValidateSectorStatusFailed(exitCode));
     }
 
-    // =========================================================
-    //                    INTERNAL HELPERS
-    // =========================================================
+    /// @notice Calls GetNominalSectorExpiration on a miner actor without reverting on actor error.
+    /// @param minerId The miner actor ID
+    /// @param sector The sector number
+    /// @return ok Whether the call succeeded (exit code 0); false if the sector is absent
+    /// @return expiration The nominal expiration epoch; 0 if ok is false
+    function tryGetNominalSectorExpiration(uint64 minerId, uint64 sector)
+        internal
+        returns (bool ok, uint64 expiration)
+    {
+        int256 exitCode;
+        (exitCode, expiration) = _getNominalSectorExpiration(minerId, sector);
+        ok = exitCode == EXIT_SUCCESS;
+        if (!ok) expiration = 0;
+    }
+
+    /// @notice Calls GetNominalSectorExpiration on a miner actor, reverting on actor error.
+    /// @param minerId The miner actor ID
+    /// @param sector The sector number
+    /// @return expiration The nominal expiration epoch
+    function getNominalSectorExpiration(uint64 minerId, uint64 sector) internal returns (uint64 expiration) {
+        int256 exitCode;
+        (exitCode, expiration) = _getNominalSectorExpiration(minerId, sector);
+        require(exitCode == EXIT_SUCCESS, GetNominalSectorExpirationFailed(exitCode));
+    }
 
     /// @dev Calls ValidateSectorStatus via CALL_ACTOR_BY_ID without allocating memory.
-    ///
-    /// Scratch layout (above FMP, FMP not bumped):
-    ///   [fmp+0x00 .. fmp+0xff] — call data (7 × 32-byte ABI header + 32-byte params slot)
-    ///   fmp is reused for returndatacopy reads after the call completes
-    ///
-    /// Call data ABI layout for (uint64 method, uint256 value, uint64 flags, uint64 codec, bytes params, uint64 actorId):
-    ///   [fmp+0x00]: method   [fmp+0x20]: value   [fmp+0x40]: flags  [fmp+0x60]: codec
-    ///   [fmp+0x80]: params_offset=0xc0            [fmp+0xa0]: actorId
-    ///   [fmp+0xc0]: params.length                 [fmp+0xe0]: params bytes (padded to 32)
-    ///
-    /// Return data layout for (int256 exitCode, uint64 codec, bytes retData):
-    ///   [0x00]: exitCode  [0x20]: codec  [0x40]: retData_offset=0x60  [0x60]: retData.length  [0x80]: retData bytes
     function _validateSectorStatus(uint64 minerId, uint64 sector, SectorStatus status, int64 deadline, int64 partition)
         private
         returns (int256 exitCode, bool valid)
     {
         assembly ("memory-safe") {
-            // ---- Yul helpers ----
-
             function writeCborUint64(ptr, v) -> newPtr {
                 if lt(v, 24) {
                     mstore8(ptr, v)
@@ -129,23 +130,22 @@ library FVMSector {
                 newPtr := writeCborUint64(ptr, v)
             }
 
-            // ---- Write call data at fmp ----
+            // Write call data
             let fmp := mload(0x40)
             mstore(fmp, VALIDATE_SECTOR_STATUS)
             mstore(add(fmp, 0x20), 0)
             mstore(add(fmp, 0x40), READONLY_FLAG)
             mstore(add(fmp, 0x60), CBOR_CODEC)
-            mstore(add(fmp, 0x80), 0xc0) // params offset = 6 * 32
+            mstore(add(fmp, 0x80), 0xc0) // params offset
             mstore(add(fmp, 0xa0), minerId)
-            // params length and data filled below
 
-            // ---- Encode params CBOR [sector, status, aux_data] at fmp+0xe0 ----
+            // Encode params CBOR [sector, status, aux_data]
             let p := add(fmp, 0xe0)
             mstore(p, 0) // clear the params slot
             mstore8(p, 0x83) // 3-element array
             p := add(p, 1)
             p := writeCborUint64(p, sector)
-            mstore8(p, status) // SectorStatus 0–2 are valid inline CBOR uints
+            mstore8(p, status)
             p := add(p, 1)
             // Reserve one byte for the CBOR bytes header; write inner array inline
             let bytesHeaderPtr := p
@@ -171,6 +171,86 @@ library FVMSector {
                     if gt(returndatasize(), 128) {
                         returndatacopy(fmp, 128, 1)
                         valid := eq(byte(0, mload(fmp)), 0xf5)
+                    }
+                }
+            }
+        }
+    }
+
+    /// @dev Calls GetNominalSectorExpiration via CALL_ACTOR_BY_ID without allocating memory.
+    /// ChainEpoch is i64 in the Filecoin type system but semantically a block height, so it is always non-negative.
+    /// Builtin-actors never encodes a negative expiration.
+    /// The decoder therefore only handles CBOR major type 0 (unsigned integer).
+    function _getNominalSectorExpiration(uint64 minerId, uint64 sector)
+        private
+        returns (int256 exitCode, uint64 expiration)
+    {
+        assembly ("memory-safe") {
+            function writeCborUint64(ptr, v) -> newPtr {
+                if lt(v, 24) {
+                    mstore8(ptr, v)
+                    newPtr := add(ptr, 1)
+                    leave
+                }
+                if lt(v, 0x100) {
+                    mstore(ptr, shl(240, or(0x1800, v)))
+                    newPtr := add(ptr, 2)
+                    leave
+                }
+                if lt(v, 0x10000) {
+                    mstore(ptr, shl(232, or(0x190000, v)))
+                    newPtr := add(ptr, 3)
+                    leave
+                }
+                if lt(v, 0x100000000) {
+                    mstore(ptr, shl(216, or(0x1a00000000, v)))
+                    newPtr := add(ptr, 5)
+                    leave
+                }
+                mstore(ptr, or(shl(248, 0x1b), shl(184, v)))
+                newPtr := add(ptr, 9)
+            }
+
+            let fmp := mload(0x40)
+            mstore(fmp, GET_NOMINAL_SECTOR_EXPIRATION)
+            mstore(add(fmp, 0x20), 0)
+            mstore(add(fmp, 0x40), READONLY_FLAG)
+            mstore(add(fmp, 0x60), CBOR_CODEC)
+            mstore(add(fmp, 0x80), 0xc0) // params offset
+            mstore(add(fmp, 0xa0), minerId)
+
+            // Encode params: single CBOR uint64 (sector number)
+            let p := add(fmp, 0xe0)
+            mstore(p, 0)
+            p := writeCborUint64(p, sector)
+
+            let paramsLen := sub(p, add(fmp, 0xe0))
+            mstore(add(fmp, 0xc0), paramsLen)
+
+            let ok := call(gas(), CALL_ACTOR_BY_ID, 0, fmp, sub(p, fmp), 0, 32)
+
+            exitCode := not(0) // precompile failure
+
+            if and(ok, gt(returndatasize(), 31)) {
+                exitCode := mload(0)
+                if iszero(exitCode) {
+                    // retData first byte is at returndata offset 0x80 (after exitCode, codec, offset, length words)
+                    if gt(returndatasize(), 128) {
+                        returndatacopy(0, 128, 9) // read up to 9 bytes (max CBOR uint64 size)
+                        // One load. CBOR is big-endian: data bytes sit immediately after the header.
+                        // shl(8, w) discards the header byte, leaving data bytes at the MSB end.
+                        // shr then extracts the desired width with no masking needed (shr zero-fills).
+                        // ChainEpoch is always a non-negative block height → major type 0 only.
+                        let w := mload(0)
+                        let info := shr(248, w) // header byte; top 3 bits are 0 for major type 0
+                        let data := shl(8, w)
+                        let raw := info // inline value for info ≤ 23
+                        switch info
+                        case 24 { raw := shr(248, data) }
+                        case 25 { raw := shr(240, data) }
+                        case 26 { raw := shr(224, data) }
+                        case 27 { raw := shr(192, data) }
+                        expiration := raw
                     }
                 }
             }

@@ -3,7 +3,7 @@ pragma solidity ^0.8.30;
 
 import {CBOR_CODEC} from "../FVMCodec.sol";
 import {USR_ILLEGAL_ARGUMENT, USR_NOT_FOUND, USR_UNHANDLED_MESSAGE} from "../FVMErrors.sol";
-import {SECTOR_CONTENT_CHANGED, VALIDATE_SECTOR_STATUS} from "../FVMMethod.sol";
+import {SECTOR_CONTENT_CHANGED, VALIDATE_SECTOR_STATUS, GET_NOMINAL_SECTOR_EXPIRATION} from "../FVMMethod.sol";
 import {
     FVMSectorContentChanged,
     SectorContentChangedParams,
@@ -34,25 +34,52 @@ contract FVMMinerActor {
     }
 
     // -------------------------------------------------------------------------
-    // Mock state for ValidateSectorStatus (FIP-0112)
+    // Mock state (FIP-0112)
     // -------------------------------------------------------------------------
 
-    /// @notice Mock sector statuses. Defaults to SectorStatus.Dead (0) for unmocked sectors.
-    mapping(uint64 => SectorStatus) public sectorStatus;
+    struct MockSector {
+        SectorStatus status; // defaults to Dead (0) for unmocked sectors
+        bool hasLocation;
+        int64 deadline;
+        int64 partition;
+        bool hasExpiration; // false → GetNominalSectorExpiration returns USR_NOT_FOUND
+        uint64 expiration;
+    }
 
-    /// @notice Registered partition locations for Active/Faulty sectors.
-    mapping(uint64 => SectorLocation) private _sectorLocation;
-    mapping(uint64 => bool) private _hasLocation;
+    mapping(uint64 => MockSector) internal _sectors;
+
+    /// @notice Set all sector state at once (convenience for tests needing status + location + expiration).
+    function mockSector(uint64 sector, SectorStatus status, int64 deadline, int64 partition, uint64 expiration)
+        external
+    {
+        _sectors[sector] = MockSector({
+            status: status,
+            hasLocation: true,
+            deadline: deadline,
+            partition: partition,
+            hasExpiration: true,
+            expiration: expiration
+        });
+    }
 
     /// @notice Set the mock status for a sector.
     function mockSectorStatus(uint64 sector, SectorStatus status) external {
-        sectorStatus[sector] = status;
+        _sectors[sector].status = status;
     }
 
     /// @notice Register the partition location for a sector (required for Active/Faulty sectors).
     function mockSectorLocation(uint64 sector, int64 deadline, int64 partition) external {
-        _sectorLocation[sector] = SectorLocation(deadline, partition);
-        _hasLocation[sector] = true;
+        MockSector storage s = _sectors[sector];
+        s.hasLocation = true;
+        s.deadline = deadline;
+        s.partition = partition;
+    }
+
+    /// @notice Set the nominal expiration epoch for a sector.
+    function mockSectorExpiration(uint64 sector, uint64 expiration) external {
+        MockSector storage s = _sectors[sector];
+        s.hasExpiration = true;
+        s.expiration = expiration;
     }
 
     // -------------------------------------------------------------------------
@@ -69,6 +96,9 @@ contract FVMMinerActor {
     {
         if (method == VALIDATE_SECTOR_STATUS) {
             return _handleValidateSectorStatus(codec, params);
+        }
+        if (method == GET_NOMINAL_SECTOR_EXPIRATION) {
+            return _handleGetNominalSectorExpiration(codec, params);
         }
         return (USR_UNHANDLED_MESSAGE, 0, "");
     }
@@ -102,22 +132,21 @@ contract FVMMinerActor {
         bool noPartition = loc.partition == NO_PARTITION;
         if (noDeadline != noPartition) return (USR_ILLEGAL_ARGUMENT, 0, "");
 
-        SectorStatus current = sectorStatus[sector];
+        MockSector storage s = _sectors[sector];
 
         if (noDeadline) {
             // (NO_DEADLINE, NO_PARTITION): valid only for sectors absent from the AMT (Dead).
             // Active/Faulty sectors are in the AMT — cannot determine status without a real location.
-            if (current != SectorStatus.Dead) return (USR_NOT_FOUND, 0, "");
+            if (s.status != SectorStatus.Dead) return (USR_NOT_FOUND, 0, "");
         } else {
             // Normal location: sector must be registered at (deadline, partition).
-            if (!_hasLocation[sector]) return (USR_NOT_FOUND, 0, "");
-            SectorLocation storage registered = _sectorLocation[sector];
-            if (registered.deadline != loc.deadline || registered.partition != loc.partition) {
+            if (!s.hasLocation) return (USR_NOT_FOUND, 0, "");
+            if (s.deadline != loc.deadline || s.partition != loc.partition) {
                 return (USR_NOT_FOUND, 0, "");
             }
         }
 
-        bool valid = current == requested;
+        bool valid = s.status == requested;
         bytes memory retCbor = abi.encodePacked(valid ? uint8(0xf5) : uint8(0xf4));
         return (0, CBOR_CODEC, retCbor);
     }
@@ -216,6 +245,32 @@ contract FVMMinerActor {
             return (v, offset + 8);
         }
         revert("FVMMinerActor: uint64 too large");
+    }
+
+    function _handleGetNominalSectorExpiration(uint64 codec, bytes calldata params)
+        internal
+        view
+        returns (uint32, uint64, bytes memory)
+    {
+        if (codec != CBOR_CODEC) return (USR_ILLEGAL_ARGUMENT, 0, "");
+        // Params: a single CBOR uint64 (sector number)
+        (uint64 sector,) = _decodeCborUint64(params, 0);
+
+        MockSector storage s = _sectors[sector];
+        if (!s.hasExpiration) return (USR_NOT_FOUND, 0, "");
+
+        return (0, CBOR_CODEC, _encodeCborEpoch(s.expiration));
+    }
+
+    /// @dev CBOR-encode a ChainEpoch as a CBOR uint (major type 0).
+    ///      ChainEpoch is i64 in the Filecoin type system but is always a non-negative block
+    ///      height — builtin-actors never returns a negative sector expiration.
+    function _encodeCborEpoch(uint64 v) private pure returns (bytes memory) {
+        if (v <= 23) return abi.encodePacked(uint8(v));
+        if (v <= 0xff) return abi.encodePacked(uint8(0x18), uint8(v));
+        if (v <= 0xffff) return abi.encodePacked(uint8(0x19), uint16(v));
+        if (v <= 0xffffffff) return abi.encodePacked(uint8(0x1a), uint32(v));
+        return abi.encodePacked(uint8(0x1b), v);
     }
 
     // -------------------------------------------------------------------------

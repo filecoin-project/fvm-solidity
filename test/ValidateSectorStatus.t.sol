@@ -3,22 +3,29 @@ pragma solidity ^0.8.30;
 
 import {MockFVMTest} from "../src/mocks/MockFVMTest.sol";
 import {FVMMinerActor, SectorStatus, NO_DEADLINE, NO_PARTITION} from "../src/mocks/FVMMinerActor.sol";
-import {CBOR_CODEC} from "../src/FVMCodec.sol";
 import {USR_ILLEGAL_ARGUMENT, USR_NOT_FOUND} from "../src/FVMErrors.sol";
-import {READONLY_FLAG} from "../src/FVMFlags.sol";
-import {VALIDATE_SECTOR_STATUS} from "../src/FVMMethod.sol";
-import {CALL_ACTOR_BY_ID} from "../src/FVMPrecompiles.sol";
+import {FVMSector} from "../src/FVMSector.sol";
 
 // =============================================================
-//                          TESTS
+//               FVMSector LIBRARY TESTS
 // =============================================================
 
-/// @notice Tests for FIP-0112 ValidateSectorStatus mock.
-///         Test cases mirror the spec: https://github.com/filecoin-project/FIPs/blob/master/FIPS/fip-0112.md#test-cases
-///
-///         All calls go through CALL_ACTOR_BY_ID — matching real FVM behaviour where actor errors
-///         are returned as non-zero exit codes (success=true from the precompile), not reverts.
-contract ValidateSectorStatusTest is MockFVMTest {
+/// @dev External wrapper so vm.expectRevert targets the outer call, not the
+///      internal `call` opcode to CALL_ACTOR_BY_ID inside the library.
+contract ValidateSectorStatusCaller {
+    function validateSectorStatus(uint64 minerId, uint64 sector, SectorStatus status, int64 deadline, int64 partition)
+        external
+        returns (bool)
+    {
+        return FVMSector.validateSectorStatus(minerId, sector, status, deadline, partition);
+    }
+}
+
+contract ValidateSectorStatusLibTest is MockFVMTest {
+    using FVMSector for uint64;
+
+    ValidateSectorStatusCaller caller;
+
     uint64 constant MINER_ID = 1234;
     uint64 constant SECTOR = 42;
     int64 constant DEADLINE = 3;
@@ -29,243 +36,177 @@ contract ValidateSectorStatusTest is MockFVMTest {
     function setUp() public override {
         super.setUp();
         miner = mockMiner(MINER_ID);
+        caller = new ValidateSectorStatusCaller();
     }
 
     // -------------------------------------------------------------------------
-    // Happy paths — returns valid=true
+    // tryValidateSectorStatus — (ok=true, valid=true)
     // -------------------------------------------------------------------------
 
-    // FIP: "ValidateSectorStatus returns true when declaring a Dead sector with (NO_DEADLINE, NO_PARTITION) location as Dead"
-    function testDeadSector_NoLocation_Dead_True() public {
+    function testTry_DeadSector_NoLocation_Dead() public {
         miner.mockSectorStatus(SECTOR, SectorStatus.Dead);
-        assertTrue(_validate(SECTOR, SectorStatus.Dead, NO_DEADLINE, NO_PARTITION));
+        (bool ok, bool valid) = MINER_ID.tryValidateSectorStatus(SECTOR, SectorStatus.Dead, NO_DEADLINE, NO_PARTITION);
+        assertTrue(ok);
+        assertTrue(valid);
     }
 
-    // FIP: "ValidateSectorStatus returns true when declaring a Dead sector with a location as true"
-    // (Dead sector terminated but not yet compacted — still has a real partition location)
-    function testDeadSector_WithLocation_Dead_True() public {
+    function testTry_DeadSector_WithLocation_Dead() public {
         miner.mockSectorStatus(SECTOR, SectorStatus.Dead);
         miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
-        assertTrue(_validate(SECTOR, SectorStatus.Dead, DEADLINE, PARTITION));
+        (bool ok, bool valid) = MINER_ID.tryValidateSectorStatus(SECTOR, SectorStatus.Dead, DEADLINE, PARTITION);
+        assertTrue(ok);
+        assertTrue(valid);
     }
 
-    // FIP: "ValidateSectorStatus returns true when declaring an Active sector as Active"
-    function testActiveSector_WithLocation_Active_True() public {
+    function testTry_ActiveSector_Active() public {
         miner.mockSectorStatus(SECTOR, SectorStatus.Active);
         miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
-        assertTrue(_validate(SECTOR, SectorStatus.Active, DEADLINE, PARTITION));
+        (bool ok, bool valid) = MINER_ID.tryValidateSectorStatus(SECTOR, SectorStatus.Active, DEADLINE, PARTITION);
+        assertTrue(ok);
+        assertTrue(valid);
     }
 
-    // FIP: "ValidateSectorStatus returns true when declaring a Faulty sector Faulty"
-    function testFaultySector_WithLocation_Faulty_True() public {
+    function testTry_FaultySector_Faulty() public {
         miner.mockSectorStatus(SECTOR, SectorStatus.Faulty);
         miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
-        assertTrue(_validate(SECTOR, SectorStatus.Faulty, DEADLINE, PARTITION));
+        (bool ok, bool valid) = MINER_ID.tryValidateSectorStatus(SECTOR, SectorStatus.Faulty, DEADLINE, PARTITION);
+        assertTrue(ok);
+        assertTrue(valid);
     }
 
     // -------------------------------------------------------------------------
-    // Wrong status — returns valid=false (exit code 0, valid=false in payload)
+    // tryValidateSectorStatus — (ok=true, valid=false) wrong status
     // -------------------------------------------------------------------------
 
-    // FIP: "ValidateSectorStatus returns false when declaring an Active sector Dead"
-    function testActiveSector_Dead_False() public {
+    function testTry_ActiveSector_Dead_False() public {
         miner.mockSectorStatus(SECTOR, SectorStatus.Active);
         miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
-        assertFalse(_validate(SECTOR, SectorStatus.Dead, DEADLINE, PARTITION));
+        (bool ok, bool valid) = MINER_ID.tryValidateSectorStatus(SECTOR, SectorStatus.Dead, DEADLINE, PARTITION);
+        assertTrue(ok);
+        assertFalse(valid);
     }
 
-    // FIP: "ValidateSectorStatus returns false when declaring a Dead sector Active"
-    function testDeadSector_Active_False() public {
-        miner.mockSectorStatus(SECTOR, SectorStatus.Dead);
-        assertFalse(_validate(SECTOR, SectorStatus.Active, NO_DEADLINE, NO_PARTITION));
-    }
-
-    // FIP: "ValidateSectorStatus returns false when declaring a Faulty sector Active"
-    function testFaultySector_Active_False() public {
+    function testTry_FaultySector_Active_False() public {
         miner.mockSectorStatus(SECTOR, SectorStatus.Faulty);
         miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
-        assertFalse(_validate(SECTOR, SectorStatus.Active, DEADLINE, PARTITION));
+        (bool ok, bool valid) = MINER_ID.tryValidateSectorStatus(SECTOR, SectorStatus.Active, DEADLINE, PARTITION);
+        assertTrue(ok);
+        assertFalse(valid);
     }
 
-    // FIP: "ValidateSectorStatus returns false when declaring a Faulty sector Dead"
-    function testFaultySector_Dead_False() public {
-        miner.mockSectorStatus(SECTOR, SectorStatus.Faulty);
-        miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
-        assertFalse(_validate(SECTOR, SectorStatus.Dead, DEADLINE, PARTITION));
-    }
-
-    // FIP: "ValidateSectorStatus returns false when declaring a Dead sector Faulty"
-    function testDeadSector_Faulty_False() public {
-        miner.mockSectorStatus(SECTOR, SectorStatus.Dead);
-        assertFalse(_validate(SECTOR, SectorStatus.Faulty, NO_DEADLINE, NO_PARTITION));
-    }
-
-    // FIP: "ValidateSectorStatus returns false when declaring an Active sector Faulty"
-    function testActiveSector_Faulty_False() public {
-        miner.mockSectorStatus(SECTOR, SectorStatus.Active);
-        miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
-        assertFalse(_validate(SECTOR, SectorStatus.Faulty, DEADLINE, PARTITION));
+    function testTry_DeadSector_NoLocation_ActiveRequest_False() public {
+        // Sector absent from AMT (Dead) + NO_DEADLINE: returns false for Active/Faulty requests
+        (bool ok, bool valid) = MINER_ID.tryValidateSectorStatus(SECTOR, SectorStatus.Active, NO_DEADLINE, NO_PARTITION);
+        assertTrue(ok);
+        assertFalse(valid);
     }
 
     // -------------------------------------------------------------------------
-    // Error cases — precompile returns success=true but non-zero exit code
+    // tryValidateSectorStatus — (ok=false) actor error
     // -------------------------------------------------------------------------
 
-    // FIP: "ValidateSectorStatus fails with bad location" — wrong coordinates
-    function testBadLocation_WrongDeadline_ReturnsNotFound() public {
+    function testTry_BadLocation_ReturnsNotOk() public {
         miner.mockSectorStatus(SECTOR, SectorStatus.Active);
         miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
-        assertEq(_exitCode(SECTOR, SectorStatus.Active, DEADLINE + 1, PARTITION), int256(uint256(USR_NOT_FOUND)));
+        (bool ok,) = MINER_ID.tryValidateSectorStatus(SECTOR, SectorStatus.Active, DEADLINE + 1, PARTITION);
+        assertFalse(ok);
     }
 
-    // FIP: "ValidateSectorStatus fails with bad location" — no location registered for live sector
-    function testBadLocation_NoLocationRegistered_ReturnsNotFound() public {
-        miner.mockSectorStatus(SECTOR, SectorStatus.Active);
-        // no mockSectorLocation called
-        assertEq(_exitCode(SECTOR, SectorStatus.Active, DEADLINE, PARTITION), int256(uint256(USR_NOT_FOUND)));
+    function testTry_MixedNoLocation_ReturnsNotOk() public {
+        (bool ok,) = MINER_ID.tryValidateSectorStatus(SECTOR, SectorStatus.Active, NO_DEADLINE, PARTITION);
+        assertFalse(ok);
     }
 
-    // Sector in AMT (Active) + (NO_DEADLINE, NO_PARTITION): errors for any requested status.
-    // Note: FIP says Active/Faulty "trivially return false" here, but builtin-actors returns
-    // USR_NOT_FOUND for all three statuses when the sector exists in the AMT. We follow builtin-actors.
-    function testActiveSector_NoLocation_RequestActive_ReturnsNotFound() public {
+    function testTry_ActiveSector_NoLocation_ReturnsNotOk() public {
+        // Active sector exists in AMT — cannot validate without a real location
         miner.mockSectorStatus(SECTOR, SectorStatus.Active);
         miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
-        assertEq(_exitCode(SECTOR, SectorStatus.Active, NO_DEADLINE, NO_PARTITION), int256(uint256(USR_NOT_FOUND)));
-    }
-
-    function testActiveSector_NoLocation_RequestFaulty_ReturnsNotFound() public {
-        miner.mockSectorStatus(SECTOR, SectorStatus.Active);
-        miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
-        assertEq(_exitCode(SECTOR, SectorStatus.Faulty, NO_DEADLINE, NO_PARTITION), int256(uint256(USR_NOT_FOUND)));
-    }
-
-    function testActiveSector_NoLocation_RequestDead_ReturnsNotFound() public {
-        miner.mockSectorStatus(SECTOR, SectorStatus.Active);
-        miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
-        assertEq(_exitCode(SECTOR, SectorStatus.Dead, NO_DEADLINE, NO_PARTITION), int256(uint256(USR_NOT_FOUND)));
-    }
-
-    // Faulty sector + (NO_DEADLINE, NO_PARTITION): likewise errors for any requested status
-    function testFaultySector_NoLocation_ReturnsNotFound() public {
-        miner.mockSectorStatus(SECTOR, SectorStatus.Faulty);
-        miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
-        assertEq(_exitCode(SECTOR, SectorStatus.Faulty, NO_DEADLINE, NO_PARTITION), int256(uint256(USR_NOT_FOUND)));
-    }
-
-    // Sector absent from AMT (Dead/never committed) + (NO_DEADLINE, NO_PARTITION):
-    // returns false (not error) for Active/Faulty requests — sector trivially cannot be Active or Faulty
-    // without a location. This matches builtin-actors validate_at_no_location_for_nonexistent_sector.
-    function testDeadSector_NoLocation_RequestActive_False() public {
-        assertFalse(_validate(SECTOR, SectorStatus.Active, NO_DEADLINE, NO_PARTITION));
-    }
-
-    function testDeadSector_NoLocation_RequestFaulty_False() public {
-        assertFalse(_validate(SECTOR, SectorStatus.Faulty, NO_DEADLINE, NO_PARTITION));
-    }
-
-    // Mixing NO and non-NO is always an illegal argument
-    function testMixedNoLocation_ReturnsIllegalArgument() public {
-        assertEq(_exitCode(SECTOR, SectorStatus.Active, NO_DEADLINE, PARTITION), int256(uint256(USR_ILLEGAL_ARGUMENT)));
-    }
-
-    // Malformed aux_data (not a CBOR bytes field) — miner reverts; _handleMiner converts to USR_ILLEGAL_ARGUMENT
-    function testMalformedAuxData_ReturnsIllegalArgument() public {
-        // 0xff is a CBOR break token, not valid as a bytes field header
-        bytes memory badParams = _encodeParamsRaw(SECTOR, SectorStatus.Active, hex"ff");
-        (bool precompileSuccess, int256 exitCode,) = _callRaw(badParams);
-        assertTrue(precompileSuccess, "precompile must not revert on actor errors");
-        assertEq(exitCode, int256(uint256(USR_ILLEGAL_ARGUMENT)));
+        (bool ok,) = MINER_ID.tryValidateSectorStatus(SECTOR, SectorStatus.Active, NO_DEADLINE, NO_PARTITION);
+        assertFalse(ok);
     }
 
     // -------------------------------------------------------------------------
-    // Helpers
+    // validateSectorStatus — success
     // -------------------------------------------------------------------------
 
-    /// @dev Call ValidateSectorStatus through the precompile and return (precompileSuccess, exitCode, retData).
-    ///      The precompile must always return success=true (matching real FVM — actor errors are exit codes).
-    function _callRaw(bytes memory params)
-        internal
-        returns (bool precompileSuccess, int256 exitCode, bytes memory retData)
-    {
-        bytes memory callData = abi.encode(
-            uint64(VALIDATE_SECTOR_STATUS),
-            uint256(0),
-            uint64(READONLY_FLAG),
-            uint64(CBOR_CODEC),
-            params,
-            uint64(MINER_ID)
+    function testValidate_ActiveSector_Active() public {
+        miner.mockSectorStatus(SECTOR, SectorStatus.Active);
+        miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
+        assertTrue(MINER_ID.validateSectorStatus(SECTOR, SectorStatus.Active, DEADLINE, PARTITION));
+    }
+
+    function testValidate_ActiveSector_Dead_False() public {
+        miner.mockSectorStatus(SECTOR, SectorStatus.Active);
+        miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
+        assertFalse(MINER_ID.validateSectorStatus(SECTOR, SectorStatus.Dead, DEADLINE, PARTITION));
+    }
+
+    // -------------------------------------------------------------------------
+    // writeCborUint64 branch coverage (sector number drives the encoding)
+    // branch 1: v ≤ 23         — 1 byte inline
+    // branch 2: 24 ≤ v ≤ 0xff  — 0x18 + uint8
+    // branch 3: v ≤ 0xffff     — 0x19 + uint16
+    // branch 4: v ≤ 0xffffffff — 0x1a + uint32
+    // branch 5: v > 0xffffffff — 0x1b + uint64
+    // -------------------------------------------------------------------------
+
+    function _registerAndValidate(uint64 sector) internal {
+        miner.mockSectorStatus(sector, SectorStatus.Active);
+        miner.mockSectorLocation(sector, DEADLINE, PARTITION);
+        (bool ok, bool valid) = MINER_ID.tryValidateSectorStatus(sector, SectorStatus.Active, DEADLINE, PARTITION);
+        assertTrue(ok);
+        assertTrue(valid);
+    }
+
+    function testSectorEncoding_1Byte_Zero() public {
+        _registerAndValidate(0);
+    }
+
+    function testSectorEncoding_1Byte_Max() public {
+        _registerAndValidate(23);
+    }
+
+    function testSectorEncoding_3Byte_Min() public {
+        _registerAndValidate(256);
+    }
+
+    function testSectorEncoding_3Byte_Max() public {
+        _registerAndValidate(0xffff);
+    }
+
+    function testSectorEncoding_5Byte_Min() public {
+        _registerAndValidate(0x10000);
+    }
+
+    function testSectorEncoding_5Byte_Max() public {
+        _registerAndValidate(0xffffffff);
+    }
+
+    function testSectorEncoding_9Byte_Min() public {
+        _registerAndValidate(0x100000000);
+    }
+
+    function testSectorEncoding_9Byte_Max() public {
+        _registerAndValidate(type(uint64).max);
+    }
+
+    // -------------------------------------------------------------------------
+    // validateSectorStatus — reverts on actor error
+    // -------------------------------------------------------------------------
+
+    function testValidate_BadLocation_Reverts() public {
+        miner.mockSectorStatus(SECTOR, SectorStatus.Active);
+        miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
+        vm.expectRevert(
+            abi.encodeWithSelector(FVMSector.ValidateSectorStatusFailed.selector, int256(uint256(USR_NOT_FOUND)))
         );
-        bytes memory ret;
-        (precompileSuccess, ret) = CALL_ACTOR_BY_ID.call(callData);
-        if (precompileSuccess && ret.length > 0) {
-            (exitCode,, retData) = abi.decode(ret, (int256, uint64, bytes));
-        }
+        caller.validateSectorStatus(MINER_ID, SECTOR, SectorStatus.Active, DEADLINE + 1, PARTITION);
     }
 
-    /// @dev Encode params, call through the precompile, assert exit code = 0, return the CBOR bool.
-    function _validate(uint64 sector, SectorStatus status, int64 deadline, int64 partition) internal returns (bool) {
-        bytes memory params = _encodeParams(sector, status, deadline, partition);
-        (bool precompileSuccess, int256 exitCode, bytes memory retData) = _callRaw(params);
-        assertTrue(precompileSuccess, "precompile must not revert");
-        assertEq(exitCode, 0, "expected success exit code");
-        return uint8(retData[0]) == 0xf5;
-    }
-
-    /// @dev Encode params, call through the precompile, return the exit code (expects non-zero for error cases).
-    function _exitCode(uint64 sector, SectorStatus status, int64 deadline, int64 partition)
-        internal
-        returns (int256 exitCode)
-    {
-        bytes memory params = _encodeParams(sector, status, deadline, partition);
-        bool precompileSuccess;
-        (precompileSuccess, exitCode,) = _callRaw(params);
-        assertTrue(precompileSuccess, "precompile must not revert");
-    }
-
-    /// @dev CBOR-encode ValidateSectorStatusParams: [sector, status, aux_data_bytes]
-    ///      where aux_data_bytes wraps the inner SectorLocation CBOR [deadline, partition].
-    function _encodeParams(uint64 sector, SectorStatus status, int64 deadline, int64 partition)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes memory locCbor = abi.encodePacked(uint8(0x82), _encodeCborInt64(deadline), _encodeCborInt64(partition));
-        return _encodeParamsRaw(sector, status, _encodeCborBytes(locCbor));
-    }
-
-    /// @dev Build params with a pre-encoded aux_data field (used for error-case testing).
-    function _encodeParamsRaw(uint64 sector, SectorStatus status, bytes memory auxDataField)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        return abi.encodePacked(uint8(0x83), _encodeCborUint64(sector), uint8(uint256(status)), auxDataField);
-    }
-
-    function _encodeCborBytes(bytes memory data) internal pure returns (bytes memory) {
-        uint256 len = data.length;
-        if (len <= 23) return abi.encodePacked(uint8(0x40 | uint8(len)), data);
-        if (len <= 0xff) return abi.encodePacked(uint8(0x58), uint8(len), data);
-        revert("_encodeCborBytes: too long");
-    }
-
-    function _encodeCborUint64(uint64 v) internal pure returns (bytes memory) {
-        if (v <= 23) return abi.encodePacked(uint8(v));
-        if (v <= 0xff) return abi.encodePacked(uint8(0x18), uint8(v));
-        if (v <= 0xffff) return abi.encodePacked(uint8(0x19), uint16(v));
-        if (v <= 0xffffffff) return abi.encodePacked(uint8(0x1a), uint32(v));
-        return abi.encodePacked(uint8(0x1b), v);
-    }
-
-    function _encodeCborInt64(int64 v) internal pure returns (bytes memory) {
-        if (v >= 0) return _encodeCborUint64(uint64(v));
-        // negative: CBOR major type 1, value = -1 - v
-        uint64 raw = uint64(-1 - v);
-        if (raw <= 23) return abi.encodePacked(uint8(0x20 | uint8(raw)));
-        if (raw <= 0xff) return abi.encodePacked(uint8(0x38), uint8(raw));
-        if (raw <= 0xffff) return abi.encodePacked(uint8(0x39), uint16(raw));
-        if (raw <= 0xffffffff) return abi.encodePacked(uint8(0x3a), uint32(raw));
-        return abi.encodePacked(uint8(0x3b), raw);
+    function testValidate_MixedNoLocation_Reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(FVMSector.ValidateSectorStatusFailed.selector, int256(uint256(USR_ILLEGAL_ARGUMENT)))
+        );
+        caller.validateSectorStatus(MINER_ID, SECTOR, SectorStatus.Active, NO_DEADLINE, PARTITION);
     }
 }
