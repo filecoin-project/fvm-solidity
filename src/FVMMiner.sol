@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
-import {EMPTY_CODEC, CBOR_CODEC} from "./FVMCodec.sol";
+import {EMPTY_CODEC} from "./FVMCodec.sol";
 import {EXIT_SUCCESS} from "./FVMErrors.sol";
 import {READONLY_FLAG} from "./FVMFlags.sol";
 import {GET_OWNER} from "./FVMMethod.sol";
@@ -31,9 +31,9 @@ library FVMMiner {
         require(exitCode == EXIT_SUCCESS, GetOwnerFailed(exitCode));
     }
 
-    /// @dev Calls GetOwner via CALL_ACTOR_BY_ID and decodes the CBOR response.
+    /// @dev Calls GetOwner via CALL_ACTOR_BY_ID and decodes the owner address bytes directly
+    ///      from returndata without an intermediate CBOR buffer allocation.
     function _getOwner(uint64 minerId) private returns (int256 exitCode, bytes memory owner) {
-        bytes memory cborData;
         assembly ("memory-safe") {
             let fmp := mload(0x40)
             mstore(fmp, GET_OWNER)
@@ -49,27 +49,23 @@ library FVMMiner {
             if and(gt(returndatasize(), 0x1f), call(gas(), CALL_ACTOR_BY_ID, 0, fmp, 0xe0, 0, 0x20)) {
                 exitCode := mload(0)
                 if iszero(exitCode) {
-                    // Read CBOR data length from returndata offset 0x60
-                    returndatacopy(0, 0x60, 0x20)
-                    let dataLen := mload(0)
-                    if and(gt(dataLen, 0), not(lt(returndatasize(), add(0x80, dataLen)))) {
-                        // Reuse fmp as the cborData bytes value (input was already consumed).
-                        cborData := fmp
-                        mstore(cborData, dataLen)
-                        returndatacopy(add(cborData, 0x20), 0x80, dataLen)
-                        mstore(0x40, add(add(cborData, 0x20), and(add(dataLen, 0x1f), not(0x1f))))
+                    // returndata layout:
+                    //   0x00: exitCode  0x20: codec  0x40: bytes ABI offset  0x60: bytes length
+                    //   0x80: CBOR data — byte 0: 0x82 array header
+                    //                    byte 1: CBOR bytes header (0x40 | addrLen, inline ≤ 23)
+                    //                    byte 2+: f0 address bytes
+                    returndatacopy(31, 0x81, 0x01)
+                    let addrLen := and(mload(0), 0x1f)
+                    if addrLen {
+                        // Reuse fmp for the owner bytes allocation (call input consumed).
+                        owner := fmp
+                        mstore(owner, addrLen)
+                        returndatacopy(add(owner, 0x20), 0x82, addrLen)
+                        mstore(0x40, add(add(owner, 0x20), and(add(addrLen, 0x1f), not(0x1f))))
                     }
                 }
             }
         }
-        if (exitCode == EXIT_SUCCESS && cborData.length > 0) {
-            owner = _decodeOwnerReturn(cborData);
-        }
-    }
-
-    /// @dev Decode the owner field from a CBOR-encoded GetOwnerReturn: array(2) [owner_bytes, ...].
-    function _decodeOwnerReturn(bytes memory data) private pure returns (bytes memory owner) {
-        (owner,) = _decodeCborBytes(data, 1);
     }
 
     /// @notice Calls GetOwner and returns the owner's actor ID.
@@ -153,19 +149,5 @@ library FVMMiner {
                 }
             }
         }
-    }
-
-    /// @dev Decode a CBOR byte string (major type 2) at `off` within `data`.
-    function _decodeCborBytes(bytes memory data, uint256 off)
-        private
-        pure
-        returns (bytes memory result, uint256 newOff)
-    {
-        uint256 len = uint8(data[off++]) & 0x1f;
-        result = new bytes(len);
-        for (uint256 i; i < len; i++) {
-            result[i] = data[off + i];
-        }
-        newOff = off + len;
     }
 }
