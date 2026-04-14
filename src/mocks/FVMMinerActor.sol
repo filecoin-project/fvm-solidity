@@ -3,7 +3,10 @@ pragma solidity ^0.8.30;
 
 import {CBOR_CODEC} from "../FVMCodec.sol";
 import {USR_ILLEGAL_ARGUMENT, USR_NOT_FOUND, USR_UNHANDLED_MESSAGE} from "../FVMErrors.sol";
-import {SECTOR_CONTENT_CHANGED, VALIDATE_SECTOR_STATUS, GET_NOMINAL_SECTOR_EXPIRATION} from "../FVMMethod.sol";
+import {FVMAddress} from "../FVMAddress.sol";
+import {
+    SECTOR_CONTENT_CHANGED, VALIDATE_SECTOR_STATUS, GET_NOMINAL_SECTOR_EXPIRATION, GET_OWNER
+} from "../FVMMethod.sol";
 import {
     FVMSectorContentChanged,
     SectorContentChangedParams,
@@ -47,6 +50,29 @@ contract FVMMinerActor {
     }
 
     mapping(uint64 => MockSector) internal _sectors;
+
+    // -------------------------------------------------------------------------
+    // Mock state (GetOwner)
+    // -------------------------------------------------------------------------
+
+    struct OwnerData {
+        bool exists;
+        uint64 owner;
+        bool hasProposed;
+        uint64 proposed;
+    }
+
+    OwnerData internal _mockOwner;
+
+    /// @notice Set the mock owner actor ID (no pending proposed change).
+    function mockOwner(uint64 owner) external {
+        _mockOwner = OwnerData({exists: true, owner: owner, hasProposed: false, proposed: 0});
+    }
+
+    /// @notice Set the mock owner actor ID with a pending proposed owner actor ID.
+    function mockOwnerWithProposed(uint64 owner, uint64 proposed) external {
+        _mockOwner = OwnerData({exists: true, owner: owner, hasProposed: true, proposed: proposed});
+    }
 
     /// @notice Set all sector state at once (convenience for tests needing status + location + expiration).
     function mockSector(uint64 sector, SectorStatus status, int64 deadline, int64 partition, uint64 expiration)
@@ -94,6 +120,9 @@ contract FVMMinerActor {
         view
         returns (uint32, uint64, bytes memory)
     {
+        if (method == GET_OWNER) {
+            return _handleGetOwner();
+        }
         if (method == VALIDATE_SECTOR_STATUS) {
             return _handleValidateSectorStatus(codec, params);
         }
@@ -260,6 +289,20 @@ contract FVMMinerActor {
         if (!s.hasExpiration) return (USR_NOT_FOUND, 0, "");
 
         return (0, CBOR_CODEC, _encodeCborEpoch(s.expiration));
+    }
+
+    function _handleGetOwner() internal view returns (uint32, uint64, bytes memory) {
+        if (!_mockOwner.exists) return (USR_NOT_FOUND, 0, "");
+        bytes memory proposedCbor =
+            _mockOwner.hasProposed ? _encodeCborF0(_mockOwner.proposed) : abi.encodePacked(uint8(0xf6)); // CBOR null
+        return (0, CBOR_CODEC, abi.encodePacked(uint8(0x82), _encodeCborF0(_mockOwner.owner), proposedCbor));
+    }
+
+    /// @dev CBOR-encode an actor ID as a CBOR byte string containing its f0 address.
+    ///      f0 is at most 11 bytes (1 protocol + 10 ULEB128), so length always fits inline (≤ 23).
+    function _encodeCborF0(uint64 actorId) private pure returns (bytes memory) {
+        bytes memory f0 = FVMAddress.f0(actorId);
+        return abi.encodePacked(uint8(0x40 | f0.length), f0);
     }
 
     /// @dev CBOR-encode a ChainEpoch as a CBOR uint (major type 0).
