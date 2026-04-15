@@ -6,7 +6,6 @@ import {EXIT_SUCCESS} from "./FVMErrors.sol";
 import {READONLY_FLAG} from "./FVMFlags.sol";
 import {GET_OWNER} from "./FVMMethod.sol";
 import {CALL_ACTOR_BY_ID} from "./FVMPrecompiles.sol";
-import {FVMAddress} from "./FVMAddress.sol";
 
 library FVMMiner {
     /// @dev The miner actor returned a non-zero exit code for GetOwner.

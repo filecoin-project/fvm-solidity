@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
+import {CalldataSlice} from "./CalldataUtils.sol";
+
 // =============================================================
 //                          STRUCTS
 // =============================================================
@@ -43,12 +45,6 @@ struct SectorContentChangedReturn {
 //             CALLDATA ITERATOR STRUCTS  (zero-copy)
 // =============================================================
 
-/// @notice A reference into calldata by absolute offset and byte length
-struct CalldataSlice {
-    uint256 offset;
-    uint256 length;
-}
-
 /// @notice Sector header as decoded by the calldata iterator
 struct SectorChangesHeader {
     uint64 sector;
@@ -62,7 +58,7 @@ struct PieceChangeIter {
     CalldataSlice digest;
     /// @notice Padded piece size in bytes
     uint64 paddedSize;
-    /// @notice Receiver-specific payload; materialise on demand with FVMSectorContentChanged.loadSlice
+    /// @notice Receiver-specific payload; materialise on demand with CalldataUtils.load
     CalldataSlice payload;
 }
 
@@ -249,16 +245,6 @@ library FVMSectorContentChanged {
         (piece.digest, cdOffset) = _cdReadCidDigest(cdOffset);
         (piece.paddedSize, cdOffset) = _cdReadUint64(cdOffset);
         (piece.payload, nextOffset) = _cdReadBytesSlice(cdOffset);
-    }
-
-    /// @notice Materialise a CalldataSlice into a new memory bytes array
-    function loadSlice(CalldataSlice memory s) internal pure returns (bytes memory result) {
-        uint256 off = s.offset;
-        uint256 length = s.length;
-        result = new bytes(length);
-        assembly ("memory-safe") {
-            calldatacopy(add(result, 32), off, length)
-        }
     }
 
     // --- calldata CBOR read primitives ---

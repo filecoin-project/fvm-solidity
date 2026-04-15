@@ -6,6 +6,7 @@ import {FVMMinerActor} from "../src/mocks/FVMMinerActor.sol";
 import {FVMAddress} from "../src/FVMAddress.sol";
 import {CBOR_CODEC} from "../src/FVMCodec.sol";
 import {SECTOR_CONTENT_CHANGED} from "../src/FVMMethod.sol";
+import {CalldataSlice, CalldataUtils} from "../src/CalldataUtils.sol";
 import {
     FVMSectorContentChanged,
     PieceChange,
@@ -23,6 +24,8 @@ import {
 
 /// @notice Benchmark receiver: calldata iterator → validate digest → abi.decode payload → encodeReturn
 contract BenchIteratorReceiver {
+    using CalldataUtils for CalldataSlice;
+
     function handle_filecoin_method(uint64, uint64, bytes calldata)
         external
         pure
@@ -42,10 +45,10 @@ contract BenchIteratorReceiver {
             for (uint256 j = 0; j < header.numPieces; j++) {
                 off = FVMSectorContentChanged.readPiece(off, piece);
                 // Materialise and validate: CID prefix was already stripped, so digest is 36 bytes
-                bytes memory digest = FVMSectorContentChanged.loadSlice(piece.digest);
+                bytes memory digest = piece.digest.load();
                 require(digest.length == 36);
                 // Decode and validate the allocation ID
-                uint64 allocationId = abi.decode(FVMSectorContentChanged.loadSlice(piece.payload), (uint64));
+                uint64 allocationId = abi.decode(piece.payload.load(), (uint64));
                 require(allocationId > 0);
                 FVMSectorContentChanged.accept(ret.sectors[i], j);
             }
@@ -92,8 +95,8 @@ contract IteratorReceiver {
             for (uint256 j = 0; j < header.numPieces; j++) {
                 off = FVMSectorContentChanged.readPiece(off, piece);
                 lastPaddedSize = piece.paddedSize;
-                lastDigest = FVMSectorContentChanged.loadSlice(piece.digest);
-                lastPayload = FVMSectorContentChanged.loadSlice(piece.payload);
+                lastDigest = CalldataUtils.load(piece.digest);
+                lastPayload = CalldataUtils.load(piece.payload);
             }
         }
 
