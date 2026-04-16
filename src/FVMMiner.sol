@@ -15,7 +15,7 @@ library FVMMiner {
     /// @param minerId The miner actor ID
     /// @return ok Whether the call succeeded (exit code 0)
     /// @return owner Raw Filecoin address bytes of the current owner; empty if ok is false
-    function tryGetOwner(uint64 minerId) internal returns (bool ok, bytes memory owner) {
+    function tryGetOwner(uint64 minerId) internal view returns (bool ok, bytes memory owner) {
         int256 exitCode;
         (exitCode, owner) = _getOwner(minerId);
         ok = exitCode == EXIT_SUCCESS;
@@ -24,7 +24,7 @@ library FVMMiner {
     /// @notice Calls GetOwner on a miner actor, reverting on actor error.
     /// @param minerId The miner actor ID
     /// @return owner Raw Filecoin address bytes of the current owner
-    function getOwner(uint64 minerId) internal returns (bytes memory owner) {
+    function getOwner(uint64 minerId) internal view returns (bytes memory owner) {
         int256 exitCode;
         (exitCode, owner) = _getOwner(minerId);
         require(exitCode == EXIT_SUCCESS, GetOwnerFailed(exitCode));
@@ -32,7 +32,7 @@ library FVMMiner {
 
     /// @dev Calls GetOwner via CALL_ACTOR_BY_ID and decodes the owner address bytes directly
     ///      from returndata without an intermediate CBOR buffer allocation.
-    function _getOwner(uint64 minerId) private returns (int256 exitCode, bytes memory owner) {
+    function _getOwner(uint64 minerId) private view returns (int256 exitCode, bytes memory owner) {
         assembly ("memory-safe") {
             let fmp := mload(0x40)
             mstore(fmp, GET_OWNER)
@@ -45,7 +45,7 @@ library FVMMiner {
 
             exitCode := not(0) // precompile failure
 
-            if and(gt(returndatasize(), 0x1f), call(gas(), CALL_ACTOR_BY_ID, 0, fmp, 0xe0, 0, 0x20)) {
+            if and(gt(returndatasize(), 0x1f), staticcall(gas(), CALL_ACTOR_BY_ID, fmp, 0xe0, 0, 0x20)) {
                 exitCode := mload(0)
                 if iszero(exitCode) {
                     // returndata layout:
@@ -71,7 +71,7 @@ library FVMMiner {
     /// @param minerId The miner actor ID
     /// @return ok Whether the call succeeded (exit code 0)
     /// @return ownerId The actor ID of the current owner; 0 if ok is false
-    function tryGetOwnerActorId(uint64 minerId) internal returns (bool ok, uint64 ownerId) {
+    function tryGetOwnerActorId(uint64 minerId) internal view returns (bool ok, uint64 ownerId) {
         int256 exitCode;
         (exitCode, ownerId) = _getOwnerActorId(minerId);
         ok = exitCode == EXIT_SUCCESS;
@@ -80,7 +80,7 @@ library FVMMiner {
     /// @notice Calls GetOwner and returns the owner's actor ID.
     /// @param minerId The miner actor ID
     /// @return ownerId The actor ID of the current owner
-    function getOwnerActorId(uint64 minerId) internal returns (uint64 ownerId) {
+    function getOwnerActorId(uint64 minerId) internal view returns (uint64 ownerId) {
         int256 exitCode;
         (exitCode, ownerId) = _getOwnerActorId(minerId);
         require(exitCode == EXIT_SUCCESS, GetOwnerFailed(exitCode));
@@ -90,7 +90,7 @@ library FVMMiner {
     /// @param minerId The miner actor ID
     /// @return ok Whether the call succeeded (exit code 0)
     /// @return owner The masked ID address of the current owner; address(0) if ok is false
-    function tryGetOwnerAddress(uint64 minerId) internal returns (bool ok, address owner) {
+    function tryGetOwnerAddress(uint64 minerId) internal view returns (bool ok, address owner) {
         int256 exitCode;
         uint64 ownerId;
         (exitCode, ownerId) = _getOwnerActorId(minerId);
@@ -103,7 +103,7 @@ library FVMMiner {
     /// @notice Calls GetOwner and decodes the f0 owner address to a masked ID address.
     /// @param minerId The miner actor ID
     /// @return owner The masked ID address of the current owner
-    function getOwnerAddress(uint64 minerId) internal returns (address owner) {
+    function getOwnerAddress(uint64 minerId) internal view returns (address owner) {
         int256 exitCode;
         uint64 ownerId;
         (exitCode, ownerId) = _getOwnerActorId(minerId);
@@ -113,7 +113,7 @@ library FVMMiner {
         }
     }
 
-    function _getOwnerActorId(uint64 minerId) private returns (int256 exitCode, uint64 ownerId) {
+    function _getOwnerActorId(uint64 minerId) private view returns (int256 exitCode, uint64 ownerId) {
         assembly ("memory-safe") {
             let fmp := mload(0x40)
             mstore(fmp, GET_OWNER)
@@ -126,7 +126,7 @@ library FVMMiner {
 
             exitCode := not(0) // precompile failure sentinel
 
-            if and(gt(returndatasize(), 0x1f), call(gas(), CALL_ACTOR_BY_ID, 0, fmp, 0xe0, 0, 0x20)) {
+            if and(gt(returndatasize(), 0x1f), staticcall(gas(), CALL_ACTOR_BY_ID, fmp, 0xe0, 0, 0x20)) {
                 exitCode := mload(0)
                 if iszero(exitCode) {
                     returndatacopy(fmp, 0x80, sub(returndatasize(), 0x80))
