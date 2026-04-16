@@ -7,6 +7,8 @@ struct CalldataSlice {
     uint256 length;
 }
 
+error WrongAddressLength(uint256 length);
+
 library CalldataUtils {
     /// @notice Materialise a CalldataSlice into a new memory bytes array
     function load(CalldataSlice memory s) internal pure returns (bytes memory result) {
@@ -15,6 +17,15 @@ library CalldataUtils {
         result = new bytes(length);
         assembly ("memory-safe") {
             calldatacopy(add(result, 32), off, length)
+        }
+    }
+
+    /// @notice Read exactly 20 bytes from a CalldataSlice as an address
+    function toAddress(CalldataSlice memory s) internal pure returns (address addr) {
+        require(s.length == 20, WrongAddressLength(s.length));
+        uint256 off = s.offset;
+        assembly ("memory-safe") {
+            addr := shr(96, calldataload(off))
         }
     }
 
