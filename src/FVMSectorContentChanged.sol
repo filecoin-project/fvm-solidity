@@ -244,7 +244,7 @@ library FVMSectorContentChanged {
         require(len == 3, UnexpectedStructLength(3, len));
         (piece.digest, cdOffset) = _cdReadCidDigest(cdOffset);
         (piece.paddedSize, cdOffset) = _cdReadUint64(cdOffset);
-        (piece.payload, nextOffset) = _cdReadBytesSlice(cdOffset);
+        (piece.payload.offset, piece.payload.length, nextOffset) = _cdReadBytesSlice(cdOffset);
     }
 
     // --- calldata CBOR read primitives ---
@@ -367,10 +367,14 @@ library FVMSectorContentChanged {
         revert CborLengthTooLarge();
     }
 
-    function _cdReadBytesSlice(uint256 offset) private pure returns (CalldataSlice memory slice, uint256 newOffset) {
-        (slice.length, offset) = _cdReadBytesLen(offset);
-        slice.offset = offset;
-        newOffset = offset + slice.length;
+    function _cdReadBytesSlice(uint256 offset)
+        private
+        pure
+        returns (uint256 sliceOffset, uint256 sliceLength, uint256 newOffset)
+    {
+        (sliceLength, offset) = _cdReadBytesLen(offset);
+        sliceOffset = offset;
+        newOffset = offset + sliceLength;
     }
 
     /// @notice Read a CBOR tag-42 CID from calldata, strip the 0x00 multibase prefix and the
