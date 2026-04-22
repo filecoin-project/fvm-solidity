@@ -52,10 +52,10 @@ struct SectorChangesHeader {
     uint256 numPieces;
 }
 
-/// @notice Piece decoded by the calldata iterator; digest and payload are lazy calldata slices
+/// @notice Piece decoded by the calldata iterator; payload is a lazy calldata slice
 struct PieceChangeIter {
-    /// @notice Digest portion of the piece CID (CommP: 36 bytes, sha2-256-trunc254-padded)
-    CalldataSlice digest;
+    /// @notice Raw 32-byte digest of the piece CID (CommP, sha2-256-trunc254-padded)
+    bytes32 digest;
     /// @notice Padded piece size in bytes
     uint64 paddedSize;
     /// @notice Receiver-specific payload; materialise on demand with CalldataUtils.load
@@ -374,9 +374,13 @@ library FVMSectorContentChanged {
     }
 
     /// @notice Read a CBOR tag-42 CID from calldata, strip the 0x00 multibase prefix and the
-    ///         5-byte CID header, and return a CalldataSlice pointing at the raw digest bytes.
-    /// @dev CommP CID header is always: 01 55 91 20 24 (CIDv1 / raw / sha2-256-trunc254-padded / 36-byte digest)
-    function _cdReadCidDigest(uint256 offset) private pure returns (CalldataSlice memory digest, uint256 newOffset) {
+    ///         7-byte CID header, and return a CalldataSlice pointing at the raw digest bytes.
+    /// @dev CommP CID header is always: 01 81 e2 03 92 20 20
+    ///      01       = CIDv1
+    ///      81 e2 03 = LEB128(0xf101)  fil-commitment-unsealed codec
+    ///      92 20    = LEB128(0x1012)  sha2-256-trunc254-padded multihash
+    ///      20       = LEB128(32)      digest length in bytes
+    function _cdReadCidDigest(uint256 offset) private pure returns (bytes32 digest, uint256 newOffset) {
         // CBOR tag 42 encodes as two bytes: 0xd8 0x2a
         uint16 tag;
         assembly ("memory-safe") {
@@ -385,9 +389,8 @@ library FVMSectorContentChanged {
         require(tag == 0xd82a, InvalidCidTag());
         offset += 2;
 
-        // Byte-string containing 0x00 multibase prefix + raw CID bytes
-        uint256 bytesLen;
-        (bytesLen, offset) = _cdReadBytesLen(offset);
+        // Advance past the CBOR byte-string length header
+        (, offset) = _cdReadBytesLen(offset);
 
         // Strip 0x00 identity multibase prefix
         uint8 multibase;
@@ -397,12 +400,15 @@ library FVMSectorContentChanged {
         require(multibase == 0x00, InvalidCidTag());
         offset++;
 
-        // Skip the 5-byte CID header (version + codec + multihash fn + digest length varints)
-        // so the slice starts at the raw digest bytes.
-        offset += 5;
-        digest.offset = offset;
-        digest.length = bytesLen - 1 - 5; // subtract multibase byte and CID header
-        newOffset = offset + digest.length;
+        // Skip the 7-byte CID header, then load the 32-byte digest word directly.
+        // Header: 01  81 e2 03          92 20               20
+        //         v1  LEB128(0xf101)    LEB128(0x1012)      LEB128(32)
+        //         CIDv1  fil-commitment-unsealed  sha2-256-trunc254-padded  digest-length
+        offset += 7;
+        assembly ("memory-safe") {
+            digest := calldataload(offset)
+        }
+        newOffset = offset + 32;
     }
 
     // =========================================================

@@ -5,7 +5,7 @@ import {MockFVMTest} from "../../src/mocks/MockFVMTest.sol";
 import {FVMMiner} from "../../src/FVMMiner.sol";
 import {CALL_ACTOR_BY_ID} from "../../src/FVMPrecompiles.sol";
 import {EMPTY_CODEC} from "../../src/FVMCodec.sol";
-import {USR_ILLEGAL_STATE, USR_NOT_FOUND} from "../../src/FVMErrors.sol";
+import {USR_ILLEGAL_STATE} from "../../src/FVMErrors.sol";
 
 /// @dev External wrapper so vm.expectRevert targets the outer call, not the
 ///      internal staticcall to CALL_ACTOR_BY_ID inside the library.

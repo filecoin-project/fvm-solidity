@@ -26,6 +26,9 @@ import {
 contract BenchIteratorReceiver {
     using CalldataUtils for CalldataSlice;
 
+    bytes32 private constant _DIGEST_1 = 0xcdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b36;
+    bytes32 private constant _DIGEST_2 = 0xcdf33e1783f2ff8261e66f95858ff85f976bbc0bf05ce8476d3e360832165cd0;
+
     function handle_filecoin_method(uint64, uint64, bytes calldata)
         external
         pure
@@ -44,10 +47,7 @@ contract BenchIteratorReceiver {
             FVMSectorContentChanged.initSectorReturn(ret.sectors[i], header.numPieces);
             for (uint256 j = 0; j < header.numPieces; j++) {
                 off = FVMSectorContentChanged.readPiece(off, piece);
-                // Materialise and validate: CID prefix was already stripped, so digest is 36 bytes
-                bytes memory digest = piece.digest.load();
-                require(digest.length == 36);
-                // Decode and validate the allocation ID
+                require(piece.digest == _DIGEST_1 || piece.digest == _DIGEST_2);
                 uint64 allocationId = abi.decode(piece.payload.load(), (uint64));
                 require(allocationId > 0);
                 FVMSectorContentChanged.accept(ret.sectors[i], j);
@@ -68,7 +68,7 @@ contract IteratorReceiver {
     uint64 public lastSector;
     int64 public lastMinEpoch;
     uint256 public lastNumPieces;
-    bytes public lastDigest;
+    bytes32 public lastDigest;
     uint64 public lastPaddedSize;
     bytes public lastPayload;
 
@@ -95,7 +95,7 @@ contract IteratorReceiver {
             for (uint256 j = 0; j < header.numPieces; j++) {
                 off = FVMSectorContentChanged.readPiece(off, piece);
                 lastPaddedSize = piece.paddedSize;
-                lastDigest = CalldataUtils.load(piece.digest);
+                lastDigest = piece.digest;
                 lastPayload = CalldataUtils.load(piece.payload);
             }
         }
@@ -121,12 +121,13 @@ contract SectorContentChangedTest is MockFVMTest {
     IteratorReceiver iterReceiver;
     BenchIteratorReceiver benchIterator;
 
-    // CommP CID (41 bytes): CIDv1 / raw / sha2-256-trunc254-padded / 36-byte digest
-    bytes constant COMMP_CID = hex"0155912024cdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b367a49ce18";
-    // Just the 36-byte digest portion (skipping the 5-byte prefix 01 55 91 20 24)
-    bytes constant COMMP_DIGEST = hex"cdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b367a49ce18";
-    bytes constant COMMP_CID2 = hex"0155912024cdf33e1783f2ff8261e66f95858ff85f976bbc0bf05ce8476d3e360832165cd0e480121d";
-    bytes constant COMMP_DIGEST2 = hex"cdf33e1783f2ff8261e66f95858ff85f976bbc0bf05ce8476d3e360832165cd0e480121d";
+    // CommP CID (39 bytes): CIDv1 / fil-commitment-unsealed (0xf101) / sha2-256-trunc254-padded (0x1012) / 32-byte digest
+    // Header: 01 81 e2 03 92 20 20
+    bytes constant COMMP_CID = hex"0181e203922020cdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b36";
+    // Just the 32-byte digest portion (skipping the 7-byte prefix 01 81 e2 03 92 20 20)
+    bytes32 constant COMMP_DIGEST = 0xcdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b36;
+    bytes constant COMMP_CID2 = hex"0181e203922020cdf33e1783f2ff8261e66f95858ff85f976bbc0bf05ce8476d3e360832165cd0";
+    bytes32 constant COMMP_DIGEST2 = 0xcdf33e1783f2ff8261e66f95858ff85f976bbc0bf05ce8476d3e360832165cd0;
 
     function setUp() public override {
         super.setUp();
