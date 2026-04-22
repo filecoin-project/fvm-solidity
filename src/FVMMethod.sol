@@ -11,6 +11,11 @@ uint64 constant FIRST_EXPORTED_METHOD_NUMBER = 1 << 24; // 16777216
 // All method numbers below are FRC-0042 hashed (https://github.com/filecoin-project/FIPs/blob/master/FRCs/frc-0042.md)
 
 // Storage power actor methods
+uint64 constant CREATE_MINER_POWER = 1173380165;
+uint64 constant NETWORK_RAW_POWER = 931722534;
+uint64 constant MINER_RAW_POWER = 3753401894;
+uint64 constant MINER_COUNT = 1987646258;
+uint64 constant MINER_CONSENSUS_COUNT = 196739875;
 uint64 constant MINER_POWER = 36284446;
 
 // Cross-actor receiver methods

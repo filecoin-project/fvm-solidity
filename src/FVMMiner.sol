@@ -1,15 +1,57 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
-import {EMPTY_CODEC} from "./FVMCodec.sol";
-import {EXIT_SUCCESS} from "./FVMErrors.sol";
+import {CBOR_CODEC, EMPTY_CODEC} from "./FVMCodec.sol";
+import {EXIT_SUCCESS, USR_NOT_FOUND} from "./FVMErrors.sol";
 import {READONLY_FLAG} from "./FVMFlags.sol";
-import {GET_OWNER} from "./FVMMethod.sol";
+import {GET_OWNER, MINER_POWER} from "./FVMMethod.sol";
 import {CALL_ACTOR_BY_ID} from "./FVMPrecompiles.sol";
+import {STORAGE_POWER_ACTOR_ID} from "./FVMActors.sol";
 
 library FVMMiner {
     /// @dev The miner actor returned a non-zero exit code for GetOwner.
     error GetOwnerFailed(int256 exitCode);
+
+    /// @dev The storage power actor returned an unexpected exit code for MinerPower.
+    error IsMinerFailed(int256 exitCode);
+
+    /// @notice Queries the storage power actor to determine if actorId is a registered miner.
+    /// @dev Miners with zero power are still registered; returns true for them.
+    ///      Reverts with IsMinerFailed for any exit code other than 0 or USR_NOT_FOUND:
+    ///      - USR_SERIALIZATION (21): power actor could not decode params (our encoding is always valid)
+    ///      - USR_ILLEGAL_STATE (20): power actor state or claims HAMT is corrupt
+    ///      - USR_ASSERTION_FAILED (24): HAMT key encoding failed, or a kernel error was wrapped
+    /// @param actorId The actor ID to check
+    /// @return Whether actorId is a registered miner actor
+    function isMiner(uint64 actorId) internal view returns (bool) {
+        int256 exitCode = _queryMinerPower(actorId);
+        if (exitCode == EXIT_SUCCESS) return true;
+        require(exitCode == int256(uint256(USR_NOT_FOUND)), IsMinerFailed(exitCode));
+        return false;
+    }
+
+    /// @dev Calls MinerPower on the storage power actor and returns only the exit code.
+    ///      Encodes params as CBOR [actorId] using the 8-byte uint form (always valid CBOR).
+    function _queryMinerPower(uint64 actorId) private view returns (int256 exitCode) {
+        assembly ("memory-safe") {
+            let fmp := mload(0x40)
+            mstore(fmp, MINER_POWER)
+            mstore(add(fmp, 0x20), 0)
+            mstore(add(fmp, 0x40), READONLY_FLAG)
+            mstore(add(fmp, 0x60), CBOR_CODEC)
+            mstore(add(fmp, 0x80), 0xc0) // params ABI offset (6 * 0x20)
+            mstore(add(fmp, 0xa0), STORAGE_POWER_ACTOR_ID)
+            mstore(add(fmp, 0xc0), 10) // params length = 10 bytes
+            // CBOR: 0x81 (array-1) + 0x1b (uint64 8-byte) + actorId big-endian
+            mstore(add(fmp, 0xe0), or(shl(240, 0x811b), shl(176, actorId)))
+
+            exitCode := not(0) // precompile failure sentinel
+
+            if and(gt(returndatasize(), 0x1f), staticcall(gas(), CALL_ACTOR_BY_ID, fmp, 0x100, 0, 0x20)) {
+                exitCode := mload(0)
+            }
+        }
+    }
 
     /// @notice Calls GetOwner on a miner actor without reverting on actor error.
     /// @param minerId The miner actor ID
