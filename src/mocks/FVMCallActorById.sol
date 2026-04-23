@@ -103,10 +103,9 @@ contract FVMCallActorById {
         require(flags == READONLY_FLAG || flags == NO_FLAGS, "FVMCallActorById: invalid flags");
         require(codec == CBOR_CODEC, "FVMCallActorById: expected CBOR params");
 
-        // Decode CBOR params: [actorId] (1-element array containing uint64)
-        require(params.length >= 2, "FVMCallActorById: params too short");
-        require(uint8(params[0]) == 0x81, "FVMCallActorById: expected 1-element array");
-        (uint64 queryActorId,) = _decodeCborUint64(params, 1);
+        // Decode CBOR params: bare uint64 (MinerPowerParams is #[serde(transparent)])
+        require(params.length >= 1, "FVMCallActorById: params too short");
+        (uint64 queryActorId,) = _decodeCborUint64(params, 0);
 
         bytes memory response;
         if (mockMiners[queryActorId]) {

@@ -41,9 +41,9 @@ library FVMMiner {
             mstore(add(fmp, 0x60), CBOR_CODEC)
             mstore(add(fmp, 0x80), 0xc0) // params ABI offset (6 * 0x20)
             mstore(add(fmp, 0xa0), STORAGE_POWER_ACTOR_ID)
-            mstore(add(fmp, 0xc0), 10) // params length = 10 bytes
-            // CBOR: 0x81 (array-1) + 0x1b (uint64 8-byte) + actorId big-endian
-            mstore(add(fmp, 0xe0), or(shl(240, 0x811b), shl(176, actorId)))
+            mstore(add(fmp, 0xc0), 9) // params length = 9 bytes
+            // CBOR: 0x1b (uint64 8-byte) + actorId big-endian (transparent struct)
+            mstore(add(fmp, 0xe0), or(shl(248, 0x1b), shl(184, actorId)))
 
             exitCode := not(0) // precompile failure sentinel
 

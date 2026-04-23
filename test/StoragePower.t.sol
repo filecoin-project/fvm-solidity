@@ -64,7 +64,8 @@ contract StoragePowerTest is MockFVMTest {
     // -------------------------------------------------------------------------
 
     function _callPower(uint64 minerId, uint64 flags) internal returns (bool, bytes memory) {
-        bytes memory params = abi.encodePacked(uint8(0x81), _cborUint64(minerId));
+        // MinerPowerParams is #[serde(transparent)]: serializes as bare uint64
+        bytes memory params = _cborUint64(minerId);
         bytes memory callData = abi.encode(
             uint64(MINER_POWER), uint256(0), flags, uint64(CBOR_CODEC), params, uint64(STORAGE_POWER_ACTOR_ID)
         );

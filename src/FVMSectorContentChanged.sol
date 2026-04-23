@@ -104,13 +104,14 @@ library FVMSectorContentChanged {
     /// @notice Encode SectorContentChangedReturn to CBOR.
     /// @dev Calculates exact output size first, allocates one buffer, writes in a single pass.
     ///      Bit j of accepted[j/256] encodes whether piece j was accepted.
+    ///      All three wrapper types (SectorContentChangedReturn, SectorReturn, PieceReturn) are
+    ///      transparent, so each serializes as its bare inner value.
     function encodeReturn(SectorContentChangedReturn memory ret) internal pure returns (bytes memory result) {
         // Pass 1: exact size.
-        // Outer tuple (1 byte) + sectors array header + per-sector SectorReturn tuple header (always 1 byte, hoisted)
-        uint256 size = 1 + _cborArrayHeaderSize(ret.sectors.length) + ret.sectors.length;
+        // sectors array header + per-sector (pieces array header + 1 byte per piece (0xf4/0xf5))
+        uint256 size = _cborArrayHeaderSize(ret.sectors.length);
         for (uint256 i = 0; i < ret.sectors.length; i++) {
-            // pieces array header + 2 bytes per piece ([accepted] = 0x81 + 0xf4/0xf5)
-            size += _cborArrayHeaderSize(ret.sectors[i].numPieces) + ret.sectors[i].numPieces * 2;
+            size += _cborArrayHeaderSize(ret.sectors[i].numPieces) + ret.sectors[i].numPieces;
         }
 
         // Pass 2: allocate once, write directly via a raw memory pointer
@@ -119,19 +120,16 @@ library FVMSectorContentChanged {
         assembly ("memory-safe") {
             ptr := add(result, 32)
         }
-        ptr = _writeCborArrayHeader(ptr, 1);
         ptr = _writeCborArrayHeader(ptr, ret.sectors.length);
         for (uint256 i = 0; i < ret.sectors.length; i++) {
             SectorReturn memory sr = ret.sectors[i];
-            ptr = _writeCborArrayHeader(ptr, 1);
             ptr = _writeCborArrayHeader(ptr, sr.numPieces);
             for (uint256 j = 0; j < sr.numPieces; j++) {
                 // bit j of accepted[j/256]; j>>8 == j/256, j&0xff == j%256
                 uint256 accepted = (sr.accepted[j >> 8] >> (j & 0xff)) & 1;
                 assembly ("memory-safe") {
-                    mstore8(ptr, 0x81)
-                    mstore8(add(ptr, 1), add(0xf4, accepted)) // false=0xf4, true=0xf5
-                    ptr := add(ptr, 2)
+                    mstore8(ptr, add(0xf4, accepted)) // false=0xf4, true=0xf5
+                    ptr := add(ptr, 1)
                 }
             }
         }
@@ -142,13 +140,14 @@ library FVMSectorContentChanged {
     // =========================================================
 
     /// @notice Encode SectorContentChangedParams to CBOR
-    /// @dev Used by mocks to build the params that a miner actor would send
+    /// @dev Used by mocks to build the params that a miner actor would send.
+    ///      SectorContentChangedParams is transparent so it serializes as bare Vec<SectorChanges>.
     function encodeParams(SectorContentChangedParams memory params) internal pure returns (bytes memory) {
         bytes memory sectorsArr = _cborArrayHeader(params.sectors.length);
         for (uint256 i = 0; i < params.sectors.length; i++) {
             sectorsArr = abi.encodePacked(sectorsArr, _encodeSectorChanges(params.sectors[i]));
         }
-        return abi.encodePacked(_cborArrayHeader(1), sectorsArr);
+        return sectorsArr;
     }
 
     function _encodeSectorChanges(SectorChanges memory sc) private pure returns (bytes memory) {
@@ -170,32 +169,20 @@ library FVMSectorContentChanged {
     // =========================================================
 
     /// @notice Decode CBOR-encoded SectorContentChangedReturn
-    /// @dev Used by mocks/tests to parse the return value from a receiving contract
+    /// @dev Used by mocks/tests to parse the return value from a receiving contract.
+    ///      SectorContentChangedReturn, SectorReturn, and PieceReturn are all flat nested arrays
     function decodeReturn(bytes memory data) internal pure returns (SectorContentChangedReturn memory ret) {
         uint256 offset = 0;
-
-        uint256 outerLen;
-        (outerLen, offset) = _readArrayHeader(data, offset);
-        require(outerLen == 1, UnexpectedStructLength(1, outerLen));
 
         uint256 numSectors;
         (numSectors, offset) = _readArrayHeader(data, offset);
         ret.sectors = new SectorReturn[](numSectors);
         for (uint256 i = 0; i < numSectors; i++) {
-            uint256 sectorRetLen;
-            (sectorRetLen, offset) = _readArrayHeader(data, offset);
-            require(sectorRetLen == 1, UnexpectedStructLength(1, sectorRetLen));
-
             uint256 numPieces;
             (numPieces, offset) = _readArrayHeader(data, offset);
             ret.sectors[i].numPieces = numPieces;
             ret.sectors[i].accepted = new uint256[]((numPieces + 255) >> 8);
             for (uint256 j = 0; j < numPieces; j++) {
-                // PieceReturn = [accepted]
-                uint256 pieceRetLen;
-                (pieceRetLen, offset) = _readArrayHeader(data, offset);
-                require(pieceRetLen == 1, UnexpectedStructLength(1, pieceRetLen));
-
                 uint8 b = uint8(data[offset++]);
                 require(b == 0xf4 || b == 0xf5, InvalidCborBool(b));
                 if (b == 0xf5) ret.sectors[i].accepted[j >> 8] |= (uint256(1) << (j & 0xff));
@@ -211,14 +198,11 @@ library FVMSectorContentChanged {
     /// @dev ABI layout: 4 selector + 32 method + 32 codec + 32 params_offset + 32 params_length = 132
     uint256 private constant PARAMS_START = 132;
 
-    /// @notice Read the outer params wrapper; returns the number of sectors and the offset of
+    /// @notice Read the params sectors array; returns the number of sectors and the offset of
     ///         the first sector's CBOR data within calldata.
+    ///         SectorContentChangedParams is transparent.
     function readParamsHeader() internal pure returns (uint256 numSectors, uint256 nextOffset) {
-        uint256 off = PARAMS_START;
-        uint256 outerLen;
-        (outerLen, off) = _cdReadArrayHeader(off);
-        require(outerLen == 1, UnexpectedStructLength(1, outerLen));
-        (numSectors, nextOffset) = _cdReadArrayHeader(off);
+        (numSectors, nextOffset) = _cdReadArrayHeader(PARAMS_START);
     }
 
     /// @notice Read one sector header at `cdOffset`, filling `header` in place.
