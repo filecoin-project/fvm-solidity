@@ -8,9 +8,9 @@ import {EMPTY_CODEC} from "../../src/FVMCodec.sol";
 import {USR_ILLEGAL_STATE} from "../../src/FVMErrors.sol";
 
 /// @dev External wrapper so vm.expectRevert targets the outer call, not the
-///      internal staticcall to CALL_ACTOR_BY_ID inside the library.
+///      internal delegatecall to CALL_ACTOR_BY_ID inside the library.
 contract IsMinerCaller {
-    function isMiner(uint64 actorId) external view returns (bool) {
+    function isMiner(uint64 actorId) external returns (bool) {
         return FVMMiner.isMiner(actorId);
     }
 }
@@ -31,7 +31,7 @@ contract IsMinerTest is MockFVMTest {
         assertTrue(FVMMiner.isMiner(MINER_ID));
     }
 
-    function testIsMiner_UnregisteredActor_ReturnsFalse() public view {
+    function testIsMiner_UnregisteredActor_ReturnsFalse() public {
         assertFalse(FVMMiner.isMiner(MINER_ID));
     }
 
@@ -55,7 +55,7 @@ contract IsMinerTest is MockFVMTest {
         caller.isMiner(MINER_ID);
     }
 
-    function testIsMiner_FuzzActorId(uint64 actorId) public view {
+    function testIsMiner_FuzzActorId(uint64 actorId) public {
         assertFalse(FVMMiner.isMiner(actorId));
     }
 }

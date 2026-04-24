@@ -14,11 +14,11 @@ import {USR_NOT_FOUND} from "../../src/FVMErrors.sol";
 /// @dev External wrapper so vm.expectRevert targets the outer call, not the
 ///      internal `call` opcode to CALL_ACTOR_BY_ID inside the library.
 contract GetOwnerCaller {
-    function getOwner(uint64 minerId) external view returns (bytes memory owner) {
+    function getOwner(uint64 minerId) external returns (bytes memory owner) {
         return FVMMiner.getOwner(minerId);
     }
 
-    function getOwnerAddress(uint64 minerId) external view returns (address owner) {
+    function getOwnerAddress(uint64 minerId) external returns (address owner) {
         return FVMMiner.getOwnerAddress(minerId);
     }
 }
@@ -75,13 +75,13 @@ contract GetOwnerTest is MockFVMTest {
         assertEq(ownerId, OWNER_ID);
     }
 
-    function testTry_NoOwnerMocked_NotOk() public view {
+    function testTry_NoOwnerMocked_NotOk() public {
         (bool ok, bytes memory owner) = FVMMiner.tryGetOwner(MINER_ID);
         assertFalse(ok);
         assertEq(owner.length, 0);
     }
 
-    function testTry_UnregisteredMiner_NotOk() public view {
+    function testTry_UnregisteredMiner_NotOk() public {
         (bool ok,) = FVMMiner.tryGetOwner(9999);
         assertFalse(ok);
     }

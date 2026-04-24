@@ -17,14 +17,6 @@ import {NO_FLAGS, READONLY_FLAG} from "../FVMFlags.sol";
 import {SEND, MINER_POWER, FIRST_EXPORTED_METHOD_NUMBER} from "../FVMMethod.sol";
 
 contract FVMCallActorById {
-    /// @notice Registry of mock miner actor IDs for PowerAPI verification
-    mapping(uint64 => bool) public mockMiners;
-
-    /// @notice Register an actor ID as a valid miner for PowerAPI calls
-    function mockMiner(uint64 actorId) external {
-        mockMiners[actorId] = true;
-    }
-
     fallback() external payable {
         (uint64 method, uint256 value, uint64 flags, uint64 codec, bytes memory params, uint64 actorId) =
             abi.decode(msg.data, (uint64, uint256, uint64, uint64, bytes, uint64));
@@ -33,7 +25,7 @@ contract FVMCallActorById {
             _handleBurn(method, value, flags, codec, params);
         } else if (actorId == STORAGE_POWER_ACTOR_ID) {
             _handlePower(method, flags, codec, params);
-        } else if (mockMiners[actorId]) {
+        } else if (FVMAddress.maskedAddress(actorId).code.length > 0) {
             _handleMiner(actorId, method, value, flags, codec, params);
         } else {
             // Unknown actor: no actor at this ID in our mock state.
@@ -108,7 +100,7 @@ contract FVMCallActorById {
         (uint64 queryActorId,) = _decodeCborUint64(params, 0);
 
         bytes memory response;
-        if (mockMiners[queryActorId]) {
+        if (FVMAddress.maskedAddress(queryActorId).code.length > 0) {
             // Encode MinerPowerReturn = [miner_claim, total_claim, has_min_power]
             // Claim = [raw_byte_power, quality_adj_power] where power = CBOR bytes (bigint)
             // Using 1 byte power (0x01) as a dummy non-zero value

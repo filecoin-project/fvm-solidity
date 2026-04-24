@@ -160,7 +160,7 @@ library FVMSector {
             let paramsLen := sub(p, add(fmp, 0xe0))
             mstore(add(fmp, 0xc0), paramsLen)
 
-            let ok := call(gas(), CALL_ACTOR_BY_ID, 0, fmp, sub(p, fmp), 0, 32)
+            let ok := delegatecall(gas(), CALL_ACTOR_BY_ID, fmp, sub(p, fmp), 0, 32)
 
             exitCode := not(0) // sentinel -1: precompile failure
 
@@ -227,7 +227,7 @@ library FVMSector {
             let paramsLen := sub(p, add(fmp, 0xe0))
             mstore(add(fmp, 0xc0), paramsLen)
 
-            let ok := call(gas(), CALL_ACTOR_BY_ID, 0, fmp, sub(p, fmp), 0, 32)
+            let ok := delegatecall(gas(), CALL_ACTOR_BY_ID, fmp, sub(p, fmp), 0, 32)
 
             exitCode := not(0) // precompile failure
 

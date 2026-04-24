@@ -184,12 +184,6 @@ contract SectorContentChangedTest is MockFVMTest {
         assertEq(iterReceiver.lastCaller(), uint64(200).maskedAddress());
     }
 
-    function testMockMinerRegistersForPowerAPI() public {
-        assertFalse(CALL_ACTOR_BY_ID_PRECOMPILE.mockMiners(9999));
-        mockMiner(9999);
-        assertTrue(CALL_ACTOR_BY_ID_PRECOMPILE.mockMiners(9999));
-    }
-
     // -------------------------
     // Calldata iterator
     // -------------------------

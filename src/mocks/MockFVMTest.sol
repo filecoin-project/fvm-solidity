@@ -19,7 +19,6 @@ contract MockFVMTest is Test {
 
     FVMGetBeaconRandomness public constant RANDOMNESS_PRECOMPILE = FVMGetBeaconRandomness(GET_BEACON_RANDOMNESS);
     FVMActor public constant ACTOR_PRECOMPILE = FVMActor(RESOLVE_ADDRESS);
-    FVMCallActorById public constant CALL_ACTOR_BY_ID_PRECOMPILE = FVMCallActorById(payable(CALL_ACTOR_BY_ID));
 
     function setUp() public virtual {
         vm.etch(CALL_ACTOR_BY_ADDRESS, address(new FVMCallActorByAddress()).code);
@@ -32,13 +31,12 @@ contract MockFVMTest is Test {
         vm.copyStorage(deployed, RESOLVE_ADDRESS);
     }
 
-    /// @notice Set up a mock miner actor at the given actor ID's masked address
-    /// @dev Etches FVMMinerActor code at the masked ID address and registers the actor ID
-    /// for PowerAPI verification. Returns the FVMMinerActor at the miner's masked address.
+    /// @notice Set up a mock miner actor at the given actor ID's masked address.
+    /// @dev Etches FVMMinerActor code at the masked ID address. PowerAPI verification
+    ///      detects the miner via extcodesize at the masked address — no separate registry needed.
     function mockMiner(uint64 actorId) internal returns (FVMMinerActor) {
         address maskedAddr = actorId.maskedAddress();
         vm.etch(maskedAddr, address(new FVMMinerActor()).code);
-        CALL_ACTOR_BY_ID_PRECOMPILE.mockMiner(actorId);
         return FVMMinerActor(maskedAddr);
     }
 }
