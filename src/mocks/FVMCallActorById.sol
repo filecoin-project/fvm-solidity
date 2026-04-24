@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
+import {CALL_ACTOR_BY_ID} from "../FVMPrecompiles.sol";
 import {BURN_ACTOR_ID, BURN_ADDRESS, STORAGE_POWER_ACTOR_ID} from "../FVMActors.sol";
 import {FVMAddress} from "../FVMAddress.sol";
 import {CBOR_CODEC, EMPTY_CODEC} from "../FVMCodec.sol";
@@ -18,6 +19,12 @@ import {SEND, MINER_POWER, FIRST_EXPORTED_METHOD_NUMBER} from "../FVMMethod.sol"
 
 contract FVMCallActorById {
     fallback() external payable {
+        // Real precompile requires delegatecall; call/staticcall returns CallForbidden → (0, empty).
+        if (address(this) == CALL_ACTOR_BY_ID) {
+            assembly ("memory-safe") {
+                revert(0, 0)
+            }
+        }
         (uint64 method, uint256 value, uint64 flags, uint64 codec, bytes memory params, uint64 actorId) =
             abi.decode(msg.data, (uint64, uint256, uint64, uint64, bytes, uint64));
 
@@ -25,7 +32,7 @@ contract FVMCallActorById {
             _handleBurn(method, value, flags, codec, params);
         } else if (actorId == STORAGE_POWER_ACTOR_ID) {
             _handlePower(method, flags, codec, params);
-        } else if (FVMAddress.maskedAddress(actorId).code.length > 0) {
+        } else if (_isMockMiner(FVMAddress.maskedAddress(actorId))) {
             _handleMiner(actorId, method, value, flags, codec, params);
         } else {
             // Unknown actor: no actor at this ID in our mock state.
@@ -100,7 +107,7 @@ contract FVMCallActorById {
         (uint64 queryActorId,) = _decodeCborUint64(params, 0);
 
         bytes memory response;
-        if (FVMAddress.maskedAddress(queryActorId).code.length > 0) {
+        if (_isMockMiner(FVMAddress.maskedAddress(queryActorId))) {
             // Encode MinerPowerReturn = [miner_claim, total_claim, has_min_power]
             // Claim = [raw_byte_power, quality_adj_power] where power = CBOR bytes (bigint)
             // Using 1 byte power (0x01) as a dummy non-zero value
@@ -142,6 +149,13 @@ contract FVMCallActorById {
         assembly ("memory-safe") {
             return(add(ret, 0x20), mload(ret))
         }
+    }
+
+    /// @dev Returns true only for addresses that have FVMMinerActor etched.
+    ///      FVMStoragePowerActor's fallback also returns data for any call, but 128 bytes not 32.
+    function _isMockMiner(address addr) private view returns (bool) {
+        (bool ok, bytes memory data) = addr.staticcall(abi.encodeWithSignature("isMockMiner()"));
+        return ok && data.length == 32 && abi.decode(data, (bool));
     }
 
     /// @dev Decode a CBOR-encoded uint64 from `data` at `offset`

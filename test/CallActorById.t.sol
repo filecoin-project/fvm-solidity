@@ -14,7 +14,7 @@ contract CallActorByIdTest is MockFVMTest {
     // Real FVM: send_raw returns ErrorNumber::NotFound → success=true, exit code NOT_FOUND (-6).
     function testUnknownActor_ReturnsNotFound() public {
         bytes memory callData = abi.encode(uint64(0), uint256(0), uint64(0), uint64(0), bytes(""), uint64(7777));
-        (bool success, bytes memory ret) = CALL_ACTOR_BY_ID.call(callData);
+        (bool success, bytes memory ret) = CALL_ACTOR_BY_ID.delegatecall(callData);
         assertTrue(success);
         (int256 exitCode,,) = abi.decode(ret, (int256, uint64, bytes));
         assertEq(exitCode, NOT_FOUND);

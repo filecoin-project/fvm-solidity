@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
+import {CALL_ACTOR_BY_ADDRESS} from "../FVMPrecompiles.sol";
 import {EMPTY_CODEC} from "../FVMCodec.sol";
 import {EXIT_SUCCESS, INSUFFICIENT_FUNDS} from "../FVMErrors.sol";
 import {NO_FLAGS} from "../FVMFlags.sol";
@@ -8,6 +9,12 @@ import {SEND} from "../FVMMethod.sol";
 
 contract FVMCallActorByAddress {
     fallback() external payable {
+        // Real precompile requires delegatecall; call/staticcall returns CallForbidden → (0, empty).
+        if (address(this) == CALL_ACTOR_BY_ADDRESS) {
+            assembly ("memory-safe") {
+                revert(0, 0)
+            }
+        }
         (uint64 method, uint256 value, uint64 flags, uint64 codec, bytes memory params, bytes memory filAddress) =
             abi.decode(msg.data, (uint64, uint256, uint64, uint64, bytes, bytes));
 

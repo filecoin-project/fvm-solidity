@@ -69,7 +69,7 @@ contract StoragePowerTest is MockFVMTest {
         bytes memory callData = abi.encode(
             uint64(MINER_POWER), uint256(0), flags, uint64(CBOR_CODEC), params, uint64(STORAGE_POWER_ACTOR_ID)
         );
-        return CALL_ACTOR_BY_ID.call(callData);
+        return CALL_ACTOR_BY_ID.delegatecall(callData);
     }
 
     function _cborUint64(uint64 v) internal pure returns (bytes memory) {

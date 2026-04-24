@@ -197,7 +197,7 @@ contract ValidateSectorStatusTest is MockFVMTest {
             uint64(MINER_ID)
         );
         bytes memory ret;
-        (precompileSuccess, ret) = CALL_ACTOR_BY_ID.call(callData);
+        (precompileSuccess, ret) = CALL_ACTOR_BY_ID.delegatecall(callData);
         if (precompileSuccess && ret.length > 0) {
             (exitCode,, retData) = abi.decode(ret, (int256, uint64, bytes));
         }

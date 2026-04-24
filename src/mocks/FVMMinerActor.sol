@@ -26,6 +26,11 @@ struct SectorLocation {
 /// via MockFVMTest.mockMiner(actorId). When it calls handle_filecoin_method on the target,
 /// msg.sender will be the masked ID address, passing the receiver's isMinerActor() check.
 contract FVMMinerActor {
+    /// @notice Marker so FVMCallActorById can distinguish miner mocks from other etched actors.
+    function isMockMiner() external pure returns (bool) {
+        return true;
+    }
+
     /// @notice Fallback for unknown ABI selectors.
     /// @dev The real miner is a native actor: it returns USR_UNHANDLED_MESSAGE for InvokeContract
     ///      (the method the EVM CALL opcode uses) rather than reverting.

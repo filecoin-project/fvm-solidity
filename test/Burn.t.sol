@@ -92,6 +92,6 @@ contract BurnTest is MockFVMTest {
         returns (bool, bytes memory)
     {
         bytes memory callData = abi.encode(method, value, flags, codec, params, uint64(BURN_ACTOR_ID));
-        return CALL_ACTOR_BY_ID.call(callData);
+        return CALL_ACTOR_BY_ID.delegatecall(callData);
     }
 }
