@@ -339,7 +339,11 @@ contract FVMMinerActor {
                 "handle_filecoin_method(uint64,uint64,bytes)", SECTOR_CONTENT_CHANGED, CBOR_CODEC, encoded
             )
         );
-        require(success, "FVMMinerActor: handle_filecoin_method reverted");
+        if (!success) {
+            assembly ("memory-safe") {
+                revert(add(returnData, 0x20), mload(returnData))
+            }
+        }
 
         (uint32 exitCode,, bytes memory retData) = abi.decode(returnData, (uint32, uint64, bytes));
         require(exitCode == 0, "FVMMinerActor: non-zero exit code");
