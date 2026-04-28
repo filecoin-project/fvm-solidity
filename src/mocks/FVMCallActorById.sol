@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {CALL_ACTOR_BY_ID} from "../FVMPrecompiles.sol";
-import {BURN_ACTOR_ID, BURN_ADDRESS, STORAGE_POWER_ACTOR_ID} from "../FVMActors.sol";
+import {BURN_ACTOR_ID, BURN_ADDRESS, DATACAP_TOKEN_ACTOR_ID, STORAGE_POWER_ACTOR_ID} from "../FVMActors.sol";
 import {FVMAddress} from "../FVMAddress.sol";
 import {CBOR_CODEC, EMPTY_CODEC} from "../FVMCodec.sol";
 import {
@@ -15,9 +15,25 @@ import {
     USR_UNHANDLED_MESSAGE
 } from "../FVMErrors.sol";
 import {NO_FLAGS, READONLY_FLAG} from "../FVMFlags.sol";
-import {SEND, MINER_POWER, FIRST_EXPORTED_METHOD_NUMBER} from "../FVMMethod.sol";
+import {DATACAP_TRANSFER, SEND, MINER_POWER, FIRST_EXPORTED_METHOD_NUMBER} from "../FVMMethod.sol";
 
 contract FVMCallActorById {
+    /// @dev CBOR `TransferReturn` for a single-allocation DataCap -> VerifReg
+    /// transfer: [from_balance(empty), to_balance(empty), recipient_data] where
+    /// recipient_data is a CBOR `VerifregResponse`:
+    /// [allocationResults([1, []]), extensionResults([0, []]), [allocId=66]]
+    /// multi-piece flows need a different fixture
+    bytes constant DEFAULT_DATACAP_TRANSFER_RETURN = hex"8340404a83820180820080811842";
+
+    struct Message {
+        uint64 method;
+        uint256 value;
+        uint64 flags;
+        uint64 codec;
+        bytes params;
+        uint64 actorId;
+    }
+
     fallback() external payable {
         // Real precompile requires delegatecall; call/staticcall returns CallForbidden → (0, empty).
         if (address(this) == CALL_ACTOR_BY_ID) {
@@ -25,15 +41,18 @@ contract FVMCallActorById {
                 revert(0, 0)
             }
         }
-        (uint64 method, uint256 value, uint64 flags, uint64 codec, bytes memory params, uint64 actorId) =
+        Message memory m;
+        (m.method, m.value, m.flags, m.codec, m.params, m.actorId) =
             abi.decode(msg.data, (uint64, uint256, uint64, uint64, bytes, uint64));
 
-        if (actorId == BURN_ACTOR_ID) {
-            _handleBurn(method, value, flags, codec, params);
-        } else if (actorId == STORAGE_POWER_ACTOR_ID) {
-            _handlePower(method, flags, codec, params);
-        } else if (_isMockMiner(FVMAddress.maskedAddress(actorId))) {
-            _handleMiner(actorId, method, value, flags, codec, params);
+        if (m.actorId == BURN_ACTOR_ID) {
+            _handleBurn(m);
+        } else if (m.actorId == STORAGE_POWER_ACTOR_ID) {
+            _handlePower(m);
+        } else if (m.actorId == DATACAP_TOKEN_ACTOR_ID) {
+            _handleDataCap(m);
+        } else if (_isMockMiner(FVMAddress.maskedAddress(m.actorId))) {
+            _handleMiner(m);
         } else {
             // Unknown actor: no actor at this ID in our mock state.
             // Matches real FVM: send_raw returns ErrorNumber::NotFound → negative exit code, success=true.
@@ -44,67 +63,16 @@ contract FVMCallActorById {
         }
     }
 
-    function _handleBurn(uint64 method, uint256 value, uint64 flags, uint64 codec, bytes memory params) internal {
-        // Invalid flag bits: precompile only accepts READONLY_FLAG (bit 0); unknown bits → PrecompileError.
-        if (flags & ~READONLY_FLAG != 0) {
-            assembly ("memory-safe") {
-                revert(0, 0)
-            }
-        }
-
-        // Methods 1–1023 are blocked by the precompile (EVM_MAX_RESERVED_METHOD=1023); method 0 is SEND.
-        if (method != SEND && method <= 1023) {
-            assembly ("memory-safe") {
-                revert(0, 0)
-            }
-        }
-
-        // Codec must be CBOR or (empty codec with no params); anything else → PrecompileError.
-        if (codec != CBOR_CODEC && (codec != EMPTY_CODEC || params.length != 0)) {
-            assembly ("memory-safe") {
-                revert(0, 0)
-            }
-        }
-
-        // Read-only + non-zero value: kernel rejects before invoking the actor.
-        if (flags == READONLY_FLAG && value > 0) {
-            bytes memory response = abi.encode(READ_ONLY, EMPTY_CODEC, bytes(""));
-            assembly ("memory-safe") {
-                return(add(response, 0x20), mload(response))
-            }
-        }
-
-        // Non-SEND methods >1023: dispatch to account actor fallback.
-        // method < FIRST_EXPORTED_METHOD_NUMBER → USR_UNHANDLED_MESSAGE; else → exit 0.
-        if (method != SEND) {
-            bytes memory response = method >= FIRST_EXPORTED_METHOD_NUMBER
-                ? abi.encode(EXIT_SUCCESS, EMPTY_CODEC, bytes(""))
-                : abi.encode(int256(uint256(USR_UNHANDLED_MESSAGE)), EMPTY_CODEC, bytes(""));
-            assembly ("memory-safe") {
-                return(add(response, 0x20), mload(response))
-            }
-        }
-
-        // SEND: transfer value. FVM ignores params for method 0.
-        (bool ok,) = BURN_ADDRESS.call{value: value}("");
-        bytes memory resp = ok
-            ? abi.encode(EXIT_SUCCESS, EMPTY_CODEC, bytes(""))
-            : abi.encode(INSUFFICIENT_FUNDS, EMPTY_CODEC, bytes(""));
-        assembly ("memory-safe") {
-            return(add(resp, 0x20), mload(resp))
-        }
-    }
-
     /// @notice Handle storage power actor calls (PowerAPI.minerPower)
     /// @dev Returns success with dummy non-zero power for registered mock miners
-    function _handlePower(uint64 method, uint64 flags, uint64 codec, bytes memory params) internal view {
-        require(method == MINER_POWER, "FVMCallActorById: unsupported power actor method");
-        require(flags == READONLY_FLAG || flags == NO_FLAGS, "FVMCallActorById: invalid flags");
-        require(codec == CBOR_CODEC, "FVMCallActorById: expected CBOR params");
+    function _handlePower(Message memory m) internal view {
+        require(m.method == MINER_POWER, "FVMCallActorById: unsupported power actor method");
+        require(m.flags == READONLY_FLAG || m.flags == NO_FLAGS, "FVMCallActorById: invalid flags");
+        require(m.codec == CBOR_CODEC, "FVMCallActorById: expected CBOR params");
 
         // Decode CBOR params: bare uint64 (MinerPowerParams is #[serde(transparent)])
-        require(params.length >= 1, "FVMCallActorById: params too short");
-        (uint64 queryActorId,) = _decodeCborUint64(params, 0);
+        require(m.params.length >= 1, "FVMCallActorById: params too short");
+        (uint64 queryActorId,) = _decodeCborUint64(m.params, 0);
 
         bytes memory response;
         if (_isMockMiner(FVMAddress.maskedAddress(queryActorId))) {
@@ -129,16 +97,65 @@ contract FVMCallActorById {
         }
     }
 
+    function _handleBurn(Message memory m) private returns (bytes memory) {
+        // Invalid flag bits: precompile only accepts READONLY_FLAG (bit 0); unknown bits → PrecompileError.
+        if (m.flags & ~READONLY_FLAG != 0) {
+            assembly ("memory-safe") {
+                revert(0, 0)
+            }
+        }
+
+        // Methods 1–1023 are blocked by the precompile (EVM_MAX_RESERVED_METHOD=1023); method 0 is SEND.
+        if (m.method != SEND && m.method <= 1023) {
+            assembly ("memory-safe") {
+                revert(0, 0)
+            }
+        }
+
+        // Codec must be CBOR or (empty codec with no params); anything else → PrecompileError.
+        if (m.codec != CBOR_CODEC && (m.codec != EMPTY_CODEC || m.params.length != 0)) {
+            assembly ("memory-safe") {
+                revert(0, 0)
+            }
+        }
+
+        // Read-only + non-zero value: kernel rejects before invoking the actor.
+        if (m.flags == READONLY_FLAG && m.value > 0) {
+            bytes memory response = abi.encode(READ_ONLY, EMPTY_CODEC, bytes(""));
+            assembly ("memory-safe") {
+                return(add(response, 0x20), mload(response))
+            }
+        }
+
+        // Non-SEND methods >1023: dispatch to account actor fallback.
+        // method < FIRST_EXPORTED_METHOD_NUMBER → USR_UNHANDLED_MESSAGE; else → exit 0.
+        if (m.method != SEND) {
+            bytes memory response = m.method >= FIRST_EXPORTED_METHOD_NUMBER
+                ? abi.encode(EXIT_SUCCESS, EMPTY_CODEC, bytes(""))
+                : abi.encode(int256(uint256(USR_UNHANDLED_MESSAGE)), EMPTY_CODEC, bytes(""));
+            assembly ("memory-safe") {
+                return(add(response, 0x20), mload(response))
+            }
+        }
+
+        // SEND: transfer value. FVM ignores params for method 0.
+        (bool ok,) = BURN_ADDRESS.call{value: m.value}("");
+        bytes memory resp = ok
+            ? abi.encode(EXIT_SUCCESS, EMPTY_CODEC, bytes(""))
+            : abi.encode(INSUFFICIENT_FUNDS, EMPTY_CODEC, bytes(""));
+        assembly ("memory-safe") {
+            return(add(resp, 0x20), mload(resp))
+        }
+    }
+
     /// @notice Forward a call to the mock miner at its masked ID address via handle_filecoin_method.
     /// @dev Matching real FVM behaviour: actor errors are returned as non-zero exit codes, not reverts.
     ///      If the miner reverts (e.g. catastrophic CBOR parse failure), convert to USR_ILLEGAL_ARGUMENT.
-    function _handleMiner(uint64 actorId, uint64 method, uint256, uint64 flags, uint64 codec, bytes memory params)
-        internal
-    {
-        require(flags == READONLY_FLAG || flags == NO_FLAGS, "FVMCallActorById: invalid flags");
-        address minerAddr = FVMAddress.maskedAddress(actorId);
+    function _handleMiner(Message memory m) internal {
+        require(m.flags == READONLY_FLAG || m.flags == NO_FLAGS, "FVMCallActorById: invalid flags");
+        address minerAddr = FVMAddress.maskedAddress(m.actorId);
         (bool success, bytes memory ret) = minerAddr.call(
-            abi.encodeWithSignature("handle_filecoin_method(uint64,uint64,bytes)", method, codec, params)
+            abi.encodeWithSignature("handle_filecoin_method(uint64,uint64,bytes)", m.method, m.codec, m.params)
         );
         if (!success) {
             bytes memory errResponse = abi.encode(uint32(USR_ILLEGAL_ARGUMENT), uint64(0), bytes(""));
@@ -181,5 +198,10 @@ contract FVMCallActorById {
             return (v, offset + 8);
         }
         revert("FVMCallActorById: uint64 too large");
+    }
+
+    function _handleDataCap(Message memory m) private pure returns (bytes memory) {
+        require(m.method == DATACAP_TRANSFER, "FVMCallActorById: DataCap only supports Transfer");
+        return abi.encode(EXIT_SUCCESS, CBOR_CODEC, DEFAULT_DATACAP_TRANSFER_RETURN);
     }
 }
