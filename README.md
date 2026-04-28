@@ -215,7 +215,7 @@ import {SEND} from "fvm-solidity/FVMMethod.sol";
 | Actor | Supported | Name | Number |
 | :---: | :-------: | :--- | :----- |
 | Any | ✅ | Send | 0 |
-| EVM, EAM | ❌ | Constructor | 1 |
+| Many | ❌ | Constructor | 1 |
 | Power | ✅ | MinerPower | 36284446 |
 | Miner | ✅ | GetOwner | 3275365574 |
 | Miner | ✅ | ValidateSectorStatus | 3092458564 |
