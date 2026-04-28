@@ -8,3 +8,4 @@ clean:
 
 test:
 	forge test
+	@forge snapshot

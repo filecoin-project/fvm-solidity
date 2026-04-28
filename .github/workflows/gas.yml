@@ -1,0 +1,33 @@
+name: Gas Snapshots
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  gas-snapshots:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.3.5
+
+      - name: Delete gas snapshot directory
+        run: rm -f .gas-snapshot
+
+      - name: Regenerate gas snapshots
+        run: make test
+
+      - name: Check for uncommitted changes
+        run: |
+          git add .gas-snapshot
+          git diff --cached --exit-code .gas-snapshot || {
+            echo "Gas snapshots are out of date. Run 'make test' locally and commit the updated .gas-snapshot file."
+            exit 1
+          }
