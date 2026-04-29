@@ -169,9 +169,11 @@ contract FVMMinerActor {
         MockSector storage s = _sectors[sector];
 
         if (noDeadline) {
-            // (NO_DEADLINE, NO_PARTITION): valid only for sectors absent from the AMT (Dead).
-            // Active/Faulty sectors are in the AMT — cannot determine status without a real location.
-            if (s.status != SectorStatus.Dead) return (USR_NOT_FOUND, 0, "");
+            // (NO_DEADLINE, NO_PARTITION): sector must be absent from the sectors AMT.
+            // Any sector with a known location is still in the AMT (even if terminated) — USR_NOT_FOUND.
+            if (s.hasLocation) return (USR_NOT_FOUND, 0, "");
+            bool valid = requested == SectorStatus.Dead;
+            return (0, CBOR_CODEC, abi.encodePacked(valid ? uint8(0xf5) : uint8(0xf4)));
         } else {
             // Normal location: sector must be registered at (deadline, partition).
             if (!s.hasLocation) return (USR_NOT_FOUND, 0, "");
