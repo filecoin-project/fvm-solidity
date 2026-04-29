@@ -45,14 +45,12 @@ contract ValidateSectorStatusLibTest is MockFVMTest {
 
     function testTry_DeadSector_NoLocation_Dead() public {
         // Sector absent from the sectors AMT (never committed or compacted away): NO_DEADLINE is valid.
-        miner.mockSectorStatus(SECTOR, SectorStatus.Dead);
         (bool ok, bool valid) = MINER_ID.tryValidateSectorStatus(SECTOR, SectorStatus.Dead, NO_DEADLINE, NO_PARTITION);
         assertTrue(ok);
         assertTrue(valid);
     }
 
     function testTry_DeadSector_WithLocation_Dead() public {
-        miner.mockSectorStatus(SECTOR, SectorStatus.Dead);
         miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
         (bool ok, bool valid) = MINER_ID.tryValidateSectorStatus(SECTOR, SectorStatus.Dead, DEADLINE, PARTITION);
         assertTrue(ok);

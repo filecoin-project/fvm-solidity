@@ -37,14 +37,12 @@ contract ValidateSectorStatusTest is MockFVMTest {
 
     // FIP: "ValidateSectorStatus returns true when declaring a Dead sector with (NO_DEADLINE, NO_PARTITION) location as Dead"
     function testDeadSector_NoLocation_Dead_True() public {
-        miner.mockSectorStatus(SECTOR, SectorStatus.Dead);
         assertTrue(_validate(SECTOR, SectorStatus.Dead, NO_DEADLINE, NO_PARTITION));
     }
 
     // FIP: "ValidateSectorStatus returns true when declaring a Dead sector with a location as true"
     // (Dead sector terminated but not yet compacted — still has a real partition location)
     function testDeadSector_WithLocation_Dead_True() public {
-        miner.mockSectorStatus(SECTOR, SectorStatus.Dead);
         miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
         assertTrue(_validate(SECTOR, SectorStatus.Dead, DEADLINE, PARTITION));
     }
@@ -76,7 +74,6 @@ contract ValidateSectorStatusTest is MockFVMTest {
 
     // FIP: "ValidateSectorStatus returns false when declaring a Dead sector Active"
     function testDeadSector_Active_False() public {
-        miner.mockSectorStatus(SECTOR, SectorStatus.Dead);
         assertFalse(_validate(SECTOR, SectorStatus.Active, NO_DEADLINE, NO_PARTITION));
     }
 
@@ -96,7 +93,6 @@ contract ValidateSectorStatusTest is MockFVMTest {
 
     // FIP: "ValidateSectorStatus returns false when declaring a Dead sector Faulty"
     function testDeadSector_Faulty_False() public {
-        miner.mockSectorStatus(SECTOR, SectorStatus.Dead);
         assertFalse(_validate(SECTOR, SectorStatus.Faulty, NO_DEADLINE, NO_PARTITION));
     }
 
@@ -125,9 +121,10 @@ contract ValidateSectorStatusTest is MockFVMTest {
         assertEq(_exitCode(SECTOR, SectorStatus.Active, DEADLINE, PARTITION), int256(uint256(USR_NOT_FOUND)));
     }
 
-    // Sector in AMT (Active) + (NO_DEADLINE, NO_PARTITION): errors for any requested status.
-    // Note: FIP says Active/Faulty "trivially return false" here, but builtin-actors returns
-    // USR_NOT_FOUND for all three statuses when the sector exists in the AMT. We follow builtin-actors.
+    // Any sector in the AMT + (NO_DEADLINE, NO_PARTITION): errors for any requested status.
+    // Matches builtin-actors validate_at_no_location_errors_when_sector_in_amt and FIP-0112 post-#1259.
+
+    // Active sector in AMT
     function testActiveSector_NoLocation_RequestActive_ReturnsNotFound() public {
         miner.mockSectorStatus(SECTOR, SectorStatus.Active);
         miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
@@ -146,9 +143,25 @@ contract ValidateSectorStatusTest is MockFVMTest {
         assertEq(_exitCode(SECTOR, SectorStatus.Dead, NO_DEADLINE, NO_PARTITION), int256(uint256(USR_NOT_FOUND)));
     }
 
-    // Faulty sector + (NO_DEADLINE, NO_PARTITION): likewise errors for any requested status
-    function testFaultySector_NoLocation_ReturnsNotFound() public {
+    // Faulty sector in AMT
+    function testFaultySector_NoLocation_RequestFaulty_ReturnsNotFound() public {
         miner.mockSectorStatus(SECTOR, SectorStatus.Faulty);
+        miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
+        assertEq(_exitCode(SECTOR, SectorStatus.Faulty, NO_DEADLINE, NO_PARTITION), int256(uint256(USR_NOT_FOUND)));
+    }
+
+    // Terminated (Dead) sector still in the AMT — has a location, not yet compacted
+    function testDeadSector_InAmt_RequestDead_NoLocation_ReturnsNotFound() public {
+        miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
+        assertEq(_exitCode(SECTOR, SectorStatus.Dead, NO_DEADLINE, NO_PARTITION), int256(uint256(USR_NOT_FOUND)));
+    }
+
+    function testDeadSector_InAmt_RequestActive_NoLocation_ReturnsNotFound() public {
+        miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
+        assertEq(_exitCode(SECTOR, SectorStatus.Active, NO_DEADLINE, NO_PARTITION), int256(uint256(USR_NOT_FOUND)));
+    }
+
+    function testDeadSector_InAmt_RequestFaulty_NoLocation_ReturnsNotFound() public {
         miner.mockSectorLocation(SECTOR, DEADLINE, PARTITION);
         assertEq(_exitCode(SECTOR, SectorStatus.Faulty, NO_DEADLINE, NO_PARTITION), int256(uint256(USR_NOT_FOUND)));
     }
