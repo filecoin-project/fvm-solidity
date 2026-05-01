@@ -8,4 +8,4 @@ clean:
 
 test:
 	forge test
-	@forge snapshot
+	@forge snapshot --no-match-test "Fuzz"

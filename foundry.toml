@@ -10,6 +10,18 @@ optimizer = true
 optimizer_runs = 200
 via_ir = true
 
+ignored_error_codes = [
+    2519, # shadowed declarations
+    3628, # https://github.com/argotorg/solidity/issues/10159
+]
+
 # For dependencies
 remappings = [
+]
+
+[lint]
+exclude_lints = [
+    "incorrect-shift",
+    "mixed-case-function",
+    #"unsafe-typecast",
 ]

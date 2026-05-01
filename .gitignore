@@ -1,6 +1,7 @@
 # forge
 cache
 out
+foundry.lock
 
 # forge flatten
 *.flat.sol
