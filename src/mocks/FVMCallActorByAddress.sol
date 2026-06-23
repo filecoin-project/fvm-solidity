@@ -37,7 +37,7 @@ contract FVMCallActorByAddress {
         require(codec == EMPTY_CODEC, "FVMCallActorByAddress: Only no-codec calls supported");
         require(params.length == 0, "FVMCallActorByAddress: No params expected");
 
-        address payable recipient;
+        address recipient;
         assembly ("memory-safe") {
             recipient := mload(add(22, filAddress))
         }
