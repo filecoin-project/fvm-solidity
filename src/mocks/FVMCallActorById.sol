@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
+import {Vm} from "forge-std/Vm.sol";
+
 import {CALL_ACTOR_BY_ID} from "../FVMPrecompiles.sol";
 import {BURN_ACTOR_ID, BURN_ADDRESS, DATACAP_TOKEN_ACTOR_ID, STORAGE_POWER_ACTOR_ID} from "../FVMActors.sol";
 import {FVMAddress} from "../FVMAddress.sol";
@@ -18,6 +20,12 @@ import {NO_FLAGS, READONLY_FLAG} from "../FVMFlags.sol";
 import {DATACAP_TRANSFER, SEND, MINER_POWER, FIRST_EXPORTED_METHOD_NUMBER} from "../FVMMethod.sol";
 
 contract FVMCallActorById {
+    Vm private immutable VM;
+
+    constructor(Vm _vm) {
+        VM = _vm;
+    }
+
     /// @dev CBOR `TransferReturn` for a single-allocation DataCap -> VerifReg
     /// transfer: [from_balance(empty), to_balance(empty), recipient_data] where
     /// recipient_data is a CBOR `VerifregResponse`:
@@ -138,11 +146,15 @@ contract FVMCallActorById {
             }
         }
 
-        // SEND: transfer value. FVM ignores params for method 0.
-        (bool ok,) = BURN_ADDRESS.call{value: m.value}("");
-        bytes memory resp = ok
-            ? abi.encode(EXIT_SUCCESS, EMPTY_CODEC, bytes(""))
-            : abi.encode(INSUFFICIENT_FUNDS, EMPTY_CODEC, bytes(""));
+        // SEND: transfer value by adjusting balances directly, avoiding calls into the receiver.
+        bytes memory resp;
+        if (address(this).balance >= m.value) {
+            VM.deal(address(this), address(this).balance - m.value);
+            VM.deal(BURN_ADDRESS, BURN_ADDRESS.balance + m.value);
+            resp = abi.encode(EXIT_SUCCESS, EMPTY_CODEC, bytes(""));
+        } else {
+            resp = abi.encode(INSUFFICIENT_FUNDS, EMPTY_CODEC, bytes(""));
+        }
         assembly ("memory-safe") {
             return(add(resp, 0x20), mload(resp))
         }

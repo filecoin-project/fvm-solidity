@@ -21,8 +21,8 @@ contract MockFVMTest is Test {
     FVMActor public constant ACTOR_PRECOMPILE = FVMActor(RESOLVE_ADDRESS);
 
     function setUp() public virtual {
-        vm.etch(CALL_ACTOR_BY_ADDRESS, address(new FVMCallActorByAddress()).code);
-        vm.etch(CALL_ACTOR_BY_ID, address(new FVMCallActorById()).code);
+        vm.etch(CALL_ACTOR_BY_ADDRESS, address(new FVMCallActorByAddress(vm)).code);
+        vm.etch(CALL_ACTOR_BY_ID, address(new FVMCallActorById(vm)).code);
         vm.etch(GET_BEACON_RANDOMNESS, address(new FVMGetBeaconRandomness()).code);
         vm.etch(STORAGE_POWER_ACTOR_ADDRESS, address(new FVMStoragePowerActor()).code);
 

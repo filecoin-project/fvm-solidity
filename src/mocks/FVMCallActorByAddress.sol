@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
+import {Vm} from "forge-std/Vm.sol";
+
 import {CALL_ACTOR_BY_ADDRESS} from "../FVMPrecompiles.sol";
 import {EMPTY_CODEC} from "../FVMCodec.sol";
 import {EXIT_SUCCESS, INSUFFICIENT_FUNDS} from "../FVMErrors.sol";
@@ -8,6 +10,12 @@ import {NO_FLAGS} from "../FVMFlags.sol";
 import {SEND} from "../FVMMethod.sol";
 
 contract FVMCallActorByAddress {
+    Vm private immutable VM;
+
+    constructor(Vm _vm) {
+        VM = _vm;
+    }
+
     fallback() external payable {
         // Real precompile requires delegatecall; call/staticcall returns CallForbidden → (0, empty).
         if (address(this) == CALL_ACTOR_BY_ADDRESS) {
@@ -29,21 +37,18 @@ contract FVMCallActorByAddress {
         require(codec == EMPTY_CODEC, "FVMCallActorByAddress: Only no-codec calls supported");
         require(params.length == 0, "FVMCallActorByAddress: No params expected");
 
-        address payable recipient;
+        address recipient;
         assembly ("memory-safe") {
             recipient := mload(add(22, filAddress))
         }
 
-        // Perform the transfer
-        (bool success,) = recipient.call{value: value}("");
-
-        // Prepare the response in FVM format: exit_code(i256) | codec(u64) | return_value(bytes)
+        // Perform the transfer by adjusting balances directly, avoiding calls into the receiver.
         bytes memory response;
-        if (success) {
-            // Success: exit code 0
+        if (address(this).balance >= value) {
+            VM.deal(address(this), address(this).balance - value);
+            VM.deal(recipient, recipient.balance + value);
             response = abi.encode(EXIT_SUCCESS, EMPTY_CODEC, bytes(""));
         } else {
-            // Failure: exit code -5 (InsufficientFunds)
             response = abi.encode(INSUFFICIENT_FUNDS, EMPTY_CODEC, bytes(""));
         }
 

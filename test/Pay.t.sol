@@ -10,15 +10,19 @@ contract PayTest is MockFVMTest {
 
     function testPayAddress() public {
         address recipient = vm.addr(1);
+        uint256 senderBefore = address(this).balance;
         assertEq(recipient.balance, 0);
         address(recipient).pay(10 ether);
         assertEq(recipient.balance, 10 ether);
+        assertEq(address(this).balance, senderBefore - 10 ether);
     }
 
     function testPayPayable() public {
         address payable recipient = payable(vm.addr(1));
+        uint256 senderBefore = address(this).balance;
         assertEq(recipient.balance, 0);
         recipient.pay(10 ether);
         assertEq(recipient.balance, 10 ether);
+        assertEq(address(this).balance, senderBefore - 10 ether);
     }
 }
