@@ -53,6 +53,8 @@ contract FVMCallActorById {
             _handleDataCap(m);
         } else if (_isMockMiner(FVMAddress.maskedAddress(m.actorId))) {
             _handleMiner(m);
+        } else if (_isMockAccount(FVMAddress.maskedAddress(m.actorId))) {
+            _handleAccount(m);
         } else {
             // Unknown actor: no actor at this ID in our mock state.
             // Matches real FVM: send_raw returns ErrorNumber::NotFound → negative exit code, success=true.
@@ -173,6 +175,28 @@ contract FVMCallActorById {
     function _isMockMiner(address addr) private view returns (bool) {
         (bool ok, bytes memory data) = addr.staticcall(abi.encodeWithSignature("isMockMiner()"));
         return ok && data.length == 32 && abi.decode(data, (bool));
+    }
+
+    function _isMockAccount(address addr) private view returns (bool) {
+        (bool ok, bytes memory data) = addr.staticcall(abi.encodeWithSignature("isMockAccount()"));
+        return ok && data.length == 32 && abi.decode(data, (bool));
+    }
+
+    function _handleAccount(Message memory m) internal {
+        require(m.flags == READONLY_FLAG || m.flags == NO_FLAGS, "FVMCallActorById: invalid flags");
+        address accountAddr = FVMAddress.maskedAddress(m.actorId);
+        (bool success, bytes memory ret) = accountAddr.call(
+            abi.encodeWithSignature("handle_filecoin_method(uint64,uint64,bytes)", m.method, m.codec, m.params)
+        );
+        if (!success) {
+            bytes memory errResponse = abi.encode(uint32(USR_ILLEGAL_ARGUMENT), uint64(0), bytes(""));
+            assembly ("memory-safe") {
+                return(add(errResponse, 0x20), mload(errResponse))
+            }
+        }
+        assembly ("memory-safe") {
+            return(add(ret, 0x20), mload(ret))
+        }
     }
 
     /// @dev Decode a CBOR-encoded uint64 from `data` at `offset`
