@@ -17,28 +17,36 @@ contract BurnTest is MockFVMTest {
     using FVMPay for address payable;
 
     function testBurn() public {
+        uint256 senderBefore = address(this).balance;
         assertEq(BURN_ADDRESS.balance, 0);
         uint256 fee = 40 ether;
         fee.burn();
         assertEq(BURN_ADDRESS.balance, 40 ether);
+        assertEq(address(this).balance, senderBefore - 40 ether);
     }
 
     function testBurnByActorId() public {
+        uint256 senderBefore = address(this).balance;
         assertEq(BURN_ADDRESS.balance, 0);
         BURN_ACTOR_ID.pay(50 ether);
         assertEq(BURN_ADDRESS.balance, 50 ether);
+        assertEq(address(this).balance, senderBefore - 50 ether);
     }
 
     function testBurnByAddress() public {
+        uint256 senderBefore = address(this).balance;
         assertEq(BURN_ADDRESS.balance, 0);
         address(BURN_ADDRESS).pay(60 ether);
         assertEq(BURN_ADDRESS.balance, 60 ether);
+        assertEq(address(this).balance, senderBefore - 60 ether);
     }
 
     function testBurnByAddressPayable() public {
+        uint256 senderBefore = address(this).balance;
         assertEq(BURN_ADDRESS.balance, 0);
         BURN_ADDRESS.pay(60 ether);
         assertEq(BURN_ADDRESS.balance, 60 ether);
+        assertEq(address(this).balance, senderBefore - 60 ether);
     }
 
     // -------------------------------------------------------------------------
