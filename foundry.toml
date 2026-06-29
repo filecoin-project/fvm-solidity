@@ -11,8 +11,7 @@ optimizer_runs = 200
 via_ir = true
 
 ignored_error_codes = [
-    2519, # shadowed declarations
-    3628, # https://github.com/argotorg/solidity/issues/10159
+    3628, # missing-receive-ether, see https://github.com/argotorg/solidity/issues/10159
 ]
 
 # For dependencies
