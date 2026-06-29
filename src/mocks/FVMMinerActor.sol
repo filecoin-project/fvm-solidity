@@ -172,8 +172,8 @@ contract FVMMinerActor {
             // (NO_DEADLINE, NO_PARTITION): sector must be absent from the sectors AMT.
             // Any sector with a known location is still in the AMT (even if terminated) — USR_NOT_FOUND.
             if (s.hasLocation) return (USR_NOT_FOUND, 0, "");
-            bool valid = requested == SectorStatus.Dead;
-            return (0, CBOR_CODEC, abi.encodePacked(valid ? uint8(0xf5) : uint8(0xf4)));
+            bool validDead = requested == SectorStatus.Dead;
+            return (0, CBOR_CODEC, abi.encodePacked(validDead ? uint8(0xf5) : uint8(0xf4)));
         } else {
             // Normal location: sector must be registered at (deadline, partition).
             if (!s.hasLocation) return (USR_NOT_FOUND, 0, "");
