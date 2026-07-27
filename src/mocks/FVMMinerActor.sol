@@ -5,7 +5,10 @@ import {CBOR_CODEC} from "../FVMCodec.sol";
 import {USR_ILLEGAL_ARGUMENT, USR_NOT_FOUND, USR_UNHANDLED_MESSAGE} from "../FVMErrors.sol";
 import {FVMAddress} from "../FVMAddress.sol";
 import {
-    SECTOR_CONTENT_CHANGED, VALIDATE_SECTOR_STATUS, GET_NOMINAL_SECTOR_EXPIRATION, GET_OWNER
+    SECTOR_CONTENT_CHANGED,
+    VALIDATE_SECTOR_STATUS,
+    GET_NOMINAL_SECTOR_EXPIRATION,
+    GET_OWNER
 } from "../FVMMethod.sol";
 import {
     FVMSectorContentChanged,
@@ -255,11 +258,7 @@ contract FVMMinerActor {
     }
 
     /// @dev Decode a CBOR-encoded uint64 from calldata at `offset`
-    function _decodeCborUint64(bytes calldata data, uint256 offset)
-        private
-        pure
-        returns (uint64 v, uint256 newOffset)
-    {
+    function _decodeCborUint64(bytes calldata data, uint256 offset) private pure returns (uint64 v, uint256 newOffset) {
         uint8 b = uint8(data[offset++]);
         require((b >> 5) == 0, "FVMMinerActor: expected CBOR uint");
         uint8 info = b & 0x1f;

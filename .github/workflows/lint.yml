@@ -18,16 +18,12 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: v1.3.5
+          version: v1.7.1
 
       - name: Format
         run: |
           forge fmt --check
 
-      - name: Build
-        run: |
-          forge build
-
       - name: Lint
         run: |
-          ! (forge lint 2>&1 | grep "")
+          forge lint --deny notes --quiet
