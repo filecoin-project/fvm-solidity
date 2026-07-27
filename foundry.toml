@@ -19,8 +19,11 @@ remappings = [
 ]
 
 [lint]
+severity = ["high", "med", "low", "info", "gas", "code-size"]
 exclude_lints = [
+    "custom-errors",
     "incorrect-shift",
     "mixed-case-function",
-    #"unsafe-typecast",
+    "multi-contract-file",
+    "unsafe-typecast",
 ]

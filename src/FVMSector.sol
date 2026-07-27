@@ -12,7 +12,6 @@ enum SectorStatus {
     Dead, // 0 — terminated or never committed
     Active, // 1 — not terminated, not faulty
     Faulty // 2 — live but currently faulty
-
 }
 
 // Sentinel values for (deadline, partition) when a sector is absent from the AMT.
