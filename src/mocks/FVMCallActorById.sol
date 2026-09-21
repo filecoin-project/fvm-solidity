@@ -54,9 +54,7 @@ contract FVMCallActorById {
         (m.method, m.value, m.flags, m.codec, m.params, m.actorId) =
             abi.decode(msg.data, (uint64, uint256, uint64, uint64, bytes, uint64));
 
-        if (m.actorId == BURN_ACTOR_ID) {
-            _handleAccount(m, BURN_ADDRESS);
-        } else if (m.method == SEND) {
+        if (m.method == SEND) {
             _handleAccountById(m);
         } else if (m.actorId == STORAGE_POWER_ACTOR_ID) {
             _handlePower(m);
