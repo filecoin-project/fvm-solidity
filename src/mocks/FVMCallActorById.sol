@@ -56,6 +56,8 @@ contract FVMCallActorById {
 
         if (m.actorId == BURN_ACTOR_ID) {
             _handleAccount(m, BURN_ADDRESS);
+        } else if (m.method == SEND) {
+            _handleAccountById(m);
         } else if (m.actorId == STORAGE_POWER_ACTOR_ID) {
             _handlePower(m);
         } else if (m.actorId == DATACAP_TOKEN_ACTOR_ID) {
@@ -63,16 +65,21 @@ contract FVMCallActorById {
         } else if (_isMockMiner(FVMAddress.maskedAddress(m.actorId))) {
             _handleMiner(m);
         } else {
-            address actorAddress = FVMActor(RESOLVE_ADDRESS).actorAddresses(m.actorId);
-            if (actorAddress != address(0)) {
-                _handleAccount(m, actorAddress);
-            } else {
-                // Unknown actor: no actor at this ID in our mock state.
-                // Matches real FVM: send_raw returns ErrorNumber::NotFound → negative exit code, success=true.
-                bytes memory response = abi.encode(NOT_FOUND, uint64(0), bytes(""));
-                assembly ("memory-safe") {
-                    return(add(response, 0x20), mload(response))
-                }
+            _handleAccountById(m);
+        }
+    }
+
+    /// @dev Serves the actor at `m.actorId` as an account actor, or NOT_FOUND if it is not in the mock state.
+    function _handleAccountById(Message memory m) private {
+        address actorAddress = FVMActor(RESOLVE_ADDRESS).actorAddresses(m.actorId);
+        if (actorAddress != address(0)) {
+            _handleAccount(m, actorAddress);
+        } else {
+            // Unknown actor: no actor at this ID in our mock state.
+            // Matches real FVM: send_raw returns ErrorNumber::NotFound → negative exit code, success=true.
+            bytes memory response = abi.encode(NOT_FOUND, uint64(0), bytes(""));
+            assembly ("memory-safe") {
+                return(add(response, 0x20), mload(response))
             }
         }
     }

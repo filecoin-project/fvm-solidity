@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
-import {RESOLVE_ADDRESS} from "./FVMPrecompiles.sol";
+import {CALL_ACTOR_BY_ID, RESOLVE_ADDRESS} from "./FVMPrecompiles.sol";
 import {FVMAddress} from "./FVMAddress.sol";
+import {EMPTY_CODEC} from "./FVMCodec.sol";
+import {EXIT_SUCCESS} from "./FVMErrors.sol";
+import {NO_FLAGS} from "./FVMFlags.sol";
+import {SEND} from "./FVMMethod.sol";
 
 library FVMActor {
     error ActorNotFound(bytes filAddress);
@@ -98,5 +102,23 @@ library FVMActor {
         bool exists;
         (exists, actorId) = tryGetActorId(addr);
         require(exists, EVMActorNotFound(addr));
+    }
+
+    /// @notice Checks if an actorId exists
+    /// @dev invokes method SEND with zero value
+    function exists(uint64 actorId) internal returns (bool valid) {
+        assembly ("memory-safe") {
+            let fmp := mload(0x40)
+            mstore(fmp, SEND) // method 0
+            mstore(add(32, fmp), 0) // value
+            mstore(add(64, fmp), NO_FLAGS) // flags
+            mstore(add(96, fmp), EMPTY_CODEC) // codec
+            mstore(add(128, fmp), 0) // params
+            mstore(add(160, fmp), actorId) // actor ID
+            valid := and(
+                and(gt(returndatasize(), 31), eq(mload(fmp), EXIT_SUCCESS)),
+                delegatecall(gas(), CALL_ACTOR_BY_ID, fmp, 192, fmp, 192)
+            )
+        }
     }
 }
