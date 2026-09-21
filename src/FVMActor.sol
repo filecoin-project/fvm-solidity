@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
-import {RESOLVE_ADDRESS} from "./FVMPrecompiles.sol";
+import {CALL_ACTOR_BY_ID, RESOLVE_ADDRESS} from "./FVMPrecompiles.sol";
 import {FVMAddress} from "./FVMAddress.sol";
+import {EMPTY_CODEC} from "./FVMCodec.sol";
+import {EXIT_SUCCESS} from "./FVMErrors.sol";
+import {NO_FLAGS} from "./FVMFlags.sol";
+import {SEND} from "./FVMMethod.sol";
 
 library FVMActor {
     error ActorNotFound(bytes filAddress);
@@ -18,9 +22,9 @@ library FVMActor {
     /// @notice Tries to get the actor ID for a Filecoin address
     /// @dev Reverts if the address is invalid.  Returns (false, 0) if actor doesn't exist.
     /// @param filAddress The Filecoin address in bytes representation (e.g., f01, f2abcde)
-    /// @return exists Whether the actor exists
+    /// @return resolved Whether actorId resolution succeeded
     /// @return actorId The actor ID (uint64), valid only if exists is true
-    function tryGetActorId(bytes memory filAddress) internal view returns (bool exists, uint64 actorId) {
+    function tryGetActorId(bytes memory filAddress) internal view returns (bool resolved, uint64 actorId) {
         assembly ("memory-safe") {
             // Get pointer to the input data and its length
             let len := mload(filAddress)
@@ -39,22 +43,22 @@ library FVMActor {
             // Check return data size to determine existence
             let returnSize := returndatasize()
 
-            // Actor exists if ANY data is returned
+            // Actor exists if ANY data is returned, except for masked addresses
             if returnSize {
-                exists := 1
+                resolved := 1
                 actorId := mload(0)
             }
         }
     }
 
-    /// @notice Gets the actor ID for a Filecoin address, requiring the actor exists
+    /// @notice Gets the actor ID for a Filecoin address, requiring precompile success
     /// @dev Reverts if the address is invalid or actor doesn't exist
     /// @param filAddress The Filecoin address in bytes representation
     /// @return actorId The actor ID (uint64)
     function getActorId(bytes memory filAddress) internal view returns (uint64 actorId) {
-        bool exists;
-        (exists, actorId) = tryGetActorId(filAddress);
-        if (!exists) revert ActorNotFound(filAddress);
+        bool resolved;
+        (resolved, actorId) = tryGetActorId(filAddress);
+        if (!resolved) revert ActorNotFound(filAddress);
     }
 
     // =============================================================
@@ -63,7 +67,7 @@ library FVMActor {
 
     /// @notice Attempts to resolve a Solidity address to an actor ID
     /// @dev Handles both f410 (delegated) and masked ID addresses (0xff + 11 zeros + 8-byte actor ID).
-    function tryGetActorId(address addr) internal view returns (bool exists, uint64 actorId) {
+    function tryGetActorId(address addr) internal view returns (bool resolved, uint64 actorId) {
         uint160 addrInt = uint160(addr);
 
         // Check for masked ID address: 0xff + 11 zero bytes + 8-byte actor ID
@@ -87,7 +91,7 @@ library FVMActor {
             }
 
             if returndatasize() {
-                exists := 1
+                resolved := 1
                 actorId := mload(0x00)
             }
         }
@@ -95,8 +99,26 @@ library FVMActor {
 
     /// @notice Resolves a Solidity address to an actor ID, requiring the actor exists
     function getActorId(address addr) internal view returns (uint64 actorId) {
-        bool exists;
-        (exists, actorId) = tryGetActorId(addr);
-        require(exists, EVMActorNotFound(addr));
+        bool resolved;
+        (resolved, actorId) = tryGetActorId(addr);
+        require(resolved, EVMActorNotFound(addr));
+    }
+
+    /// @notice Checks if an actorId exists
+    /// @dev invokes method SEND with zero value
+    function exists(uint64 actorId) internal returns (bool valid) {
+        assembly ("memory-safe") {
+            let fmp := mload(0x40)
+            mstore(fmp, SEND) // method 0
+            mstore(add(32, fmp), 0) // value
+            mstore(add(64, fmp), NO_FLAGS) // flags
+            mstore(add(96, fmp), EMPTY_CODEC) // codec
+            mstore(add(128, fmp), 0) // params
+            mstore(add(160, fmp), actorId) // actor ID
+            valid := and(
+                and(gt(returndatasize(), 31), eq(mload(fmp), EXIT_SUCCESS)),
+                delegatecall(gas(), CALL_ACTOR_BY_ID, fmp, 192, fmp, 192)
+            )
+        }
     }
 }

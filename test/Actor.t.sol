@@ -4,6 +4,7 @@ pragma solidity ^0.8.30;
 import {MockFVMTest} from "../src/mocks/MockFVMTest.sol";
 import {FVMActor} from "../src/FVMActor.sol";
 import {FVMAddress} from "../src/FVMAddress.sol";
+import {CALL_ACTOR_BY_ID} from "../src/FVMPrecompiles.sol";
 
 contract ResolveAddressTest is MockFVMTest {
     using FVMActor for bytes;
@@ -182,14 +183,12 @@ contract ResolveAddressTest is MockFVMTest {
         assertEq(actorId, expectedActorId, "Actor ID should be 99");
     }
 
-    function testMaskedIdAddressSystemActor() public {
+    function testMaskedIdAddressSystemActor() public view {
         // System actor: f00 -> 0xff + 11 zeros + actor ID
         uint64 expectedActorId = 0;
         address maskedSystemActor = address(bytes20(abi.encodePacked(hex"ff", bytes11(0), expectedActorId)));
 
-        // Mock the f0 address for actor 0
-        ACTOR_PRECOMPILE.mockResolveAddress(expectedActorId.f0(), expectedActorId);
-
+        // The system actor's f0 address is mocked by the FVMActor constructor
         (bool exists, uint64 actorId) = maskedSystemActor.tryGetActorId();
 
         assertTrue(exists, "System actor should exist");
@@ -240,5 +239,126 @@ contract ResolveAddressTest is MockFVMTest {
 
         assertTrue(exists, "Regular address should resolve via f410");
         assertEq(actorId, expectedActorId, "Actor ID should match");
+    }
+
+    // =============================================================
+    //                  EXISTS (ACTOR ID) TESTS
+    // =============================================================
+
+    function testExistsSystemActors() public {
+        uint64[10] memory systemActors = [uint64(0), 1, 2, 3, 4, 5, 6, 7, 10, 99];
+
+        for (uint256 i = 0; i < systemActors.length; i++) {
+            assertTrue(FVMActor.exists(systemActors[i]), "System actor should exist");
+        }
+    }
+
+    function testExistsMockedActor() public {
+        uint64 actorId = 1234;
+        ACTOR_PRECOMPILE.mockResolveAddress(address(0x1234567890123456789012345678901234567890), actorId);
+
+        assertTrue(FVMActor.exists(actorId), "Mocked actor should exist");
+    }
+
+    function testExistsMockedF0Actor() public {
+        uint64 actorId = 1234;
+        ACTOR_PRECOMPILE.mockResolveAddress(actorId.f0(), actorId);
+
+        assertTrue(FVMActor.exists(actorId), "Mocked f0 actor should exist");
+    }
+
+    function testExistsUnknownActor() public {
+        assertFalse(FVMActor.exists(2500), "Unmocked actor should not exist");
+    }
+
+    function testExistsUnknownActorBetweenSystemActors() public {
+        // Actor IDs 8 and 9 are not pre-mocked
+        assertFalse(FVMActor.exists(8), "Actor 8 should not exist");
+        assertFalse(FVMActor.exists(9), "Actor 9 should not exist");
+    }
+
+    function testExistsIsUnaffectedByOtherActors() public {
+        ACTOR_PRECOMPILE.mockResolveAddress(address(0x1234567890123456789012345678901234567890), 1234);
+
+        assertFalse(FVMActor.exists(1233), "Neighboring actor ID should not exist");
+        assertFalse(FVMActor.exists(1235), "Neighboring actor ID should not exist");
+    }
+
+    function testExistsMaskedIdMiner() public {
+        uint64 minerId = 1234;
+        assertFalse(FVMActor.exists(minerId), "Miner should not exist before it is mocked");
+
+        mockMiner(minerId);
+
+        assertTrue(FVMActor.exists(minerId), "Mocked miner should exist");
+    }
+
+    function testExistsMiner() public {
+        uint64 minerId = 1234;
+        assertFalse(FVMActor.exists(minerId), "Miner should not exist before it is mocked");
+
+        mockMiner(minerId);
+
+        assertTrue(FVMActor.exists(minerId), "Mocked miner should exist");
+    }
+
+    function testMockedMinerResolves() public {
+        uint64 minerId = 1234;
+        address maskedAddr = minerId.maskedAddress();
+
+        mockMiner(minerId);
+
+        (bool exists, uint64 actorId) = minerId.f0().tryGetActorId();
+        assertTrue(exists, "Miner f0 address should resolve");
+        assertEq(actorId, minerId, "Actor ID should match");
+
+        (exists, actorId) = maskedAddr.tryGetActorId();
+        assertTrue(exists, "Miner masked address should resolve");
+        assertEq(actorId, minerId, "Actor ID should match");
+    }
+
+    function testExistsDoesNotMoveValue() public {
+        uint64 actorId = 1234;
+        address actorAddress = address(0x1234567890123456789012345678901234567890);
+        ACTOR_PRECOMPILE.mockResolveAddress(actorAddress, actorId);
+        vm.deal(address(this), 10 ether);
+
+        assertTrue(FVMActor.exists(actorId));
+
+        assertEq(address(this).balance, 10 ether, "Caller balance should be unchanged");
+        assertEq(actorAddress.balance, 0, "Actor balance should be unchanged");
+    }
+
+    function testExistsIsFalseWithoutPrecompile() public {
+        // Off Filecoin there is no code at the precompile address, so the call returns no data
+        uint64 actorId = 1234;
+        ACTOR_PRECOMPILE.mockResolveAddress(address(0x1234567890123456789012345678901234567890), actorId);
+        vm.etch(CALL_ACTOR_BY_ID, "");
+
+        assertFalse(FVMActor.exists(actorId), "Should not exist without the precompile");
+    }
+
+    function testExistsIsFalseAfterPrecompileReverts() public {
+        // The real precompile reverts on invalid input; that must read as "does not exist", not bubble up
+        uint64 actorId = 1234;
+        ACTOR_PRECOMPILE.mockResolveAddress(address(0x1234567890123456789012345678901234567890), actorId);
+        vm.etch(CALL_ACTOR_BY_ID, hex"5f5ffd");
+
+        assertFalse(FVMActor.exists(actorId), "Should not exist when the precompile reverts");
+    }
+
+    function testFuzzExistsMocked(uint64 actorId) public {
+        actorId = uint64(bound(actorId, 100, type(uint64).max));
+        address actorAddress = address(uint160(uint256(keccak256(abi.encode(actorId)))));
+        vm.assume(actorAddress.code.length == 0);
+        ACTOR_PRECOMPILE.mockResolveAddress(actorAddress, actorId);
+
+        assertTrue(FVMActor.exists(actorId), "Mocked actor should exist");
+    }
+
+    function testFuzzExistsUnmocked(uint64 actorId) public {
+        actorId = uint64(bound(actorId, 100, type(uint64).max));
+
+        assertFalse(FVMActor.exists(actorId), "Unmocked actor should not exist");
     }
 }

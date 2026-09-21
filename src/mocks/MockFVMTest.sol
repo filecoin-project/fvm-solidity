@@ -33,10 +33,11 @@ contract MockFVMTest is Test {
 
     /// @notice Set up a mock miner actor at the given actor ID's masked address.
     /// @dev Etches FVMMinerActor code at the masked ID address. PowerAPI verification
-    ///      detects the miner via extcodesize at the masked address — no separate registry needed.
+    ///      detects the miner via extcodesize at the masked address.
     function mockMiner(uint64 actorId) internal returns (FVMMinerActor) {
         address maskedAddr = actorId.maskedAddress();
         vm.etch(maskedAddr, address(new FVMMinerActor()).code);
+        ACTOR_PRECOMPILE.mockResolveAddress(actorId.f0(), actorId);
         return FVMMinerActor(maskedAddr);
     }
 }
