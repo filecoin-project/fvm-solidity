@@ -13,6 +13,7 @@ import {FVMPay} from "../src/FVMPay.sol";
 
 contract CallActorByIdTest is MockFVMTest {
     using FVMAddress for uint64;
+    using FVMAddress for address;
     using FVMPay for uint64;
 
     // -------------------------------------------------------------------------
@@ -83,7 +84,15 @@ contract CallActorByIdTest is MockFVMTest {
     function testMockResolveAddress_ZeroAddress_Reverts() public {
         vm.expectRevert("FVMActor: cannot mock the zero address");
         ACTOR_PRECOMPILE.mockResolveAddress(address(0), 8888);
-        vm.expectRevert("FVMActor: cannot mock the zero address");
-        ACTOR_PRECOMPILE.mockResolveAddress(abi.encodePacked(uint8(0x04), uint8(0x0a), address(0)), 8888);
+    }
+
+    // f410(0x0) resolves to an actor on mainnet and calibration
+    function testMockedF410ZeroAddress_Pay_CreditsMaskedAddress() public {
+        address masked = uint64(8888).maskedAddress();
+        ACTOR_PRECOMPILE.mockResolveAddress(address(0).f410(), 8888);
+        assertEq(_sendExitCode(8888), EXIT_SUCCESS);
+        assertTrue(uint64(8888).pay(5 ether));
+        assertEq(masked.balance, 5 ether);
+        assertEq(address(0).balance, 0);
     }
 }

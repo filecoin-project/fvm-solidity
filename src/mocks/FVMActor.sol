@@ -66,10 +66,9 @@ contract FVMActor {
             assembly ("memory-safe") {
                 addr := shr(96, mload(add(filAddress, 0x22)))
             }
-            require(addr != address(0), "FVMActor: cannot mock the zero address");
-        } else {
-            addr = actorId.maskedAddress();
         }
+        // A zero address would read as a missing actor, so f410(0) holds its balance at its masked address
+        if (addr == address(0)) addr = actorId.maskedAddress();
         actorAddresses[actorId] = addr;
     }
 
