@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import {Vm} from "forge-std/Vm.sol";
 
 import {CALL_ACTOR_BY_ID, RESOLVE_ADDRESS} from "../FVMPrecompiles.sol";
-import {BURN_ACTOR_ID, BURN_ADDRESS, DATACAP_TOKEN_ACTOR_ID, STORAGE_POWER_ACTOR_ID} from "../FVMActors.sol";
+import {DATACAP_TOKEN_ACTOR_ID, STORAGE_POWER_ACTOR_ID} from "../FVMActors.sol";
 import {FVMAddress} from "../FVMAddress.sol";
 import {CBOR_CODEC, EMPTY_CODEC} from "../FVMCodec.sol";
 import {FVMActor} from "./FVMActor.sol";
