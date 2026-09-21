@@ -3,10 +3,11 @@ pragma solidity ^0.8.30;
 
 import {Vm} from "forge-std/Vm.sol";
 
-import {CALL_ACTOR_BY_ID} from "../FVMPrecompiles.sol";
+import {CALL_ACTOR_BY_ID, RESOLVE_ADDRESS} from "../FVMPrecompiles.sol";
 import {BURN_ACTOR_ID, BURN_ADDRESS, DATACAP_TOKEN_ACTOR_ID, STORAGE_POWER_ACTOR_ID} from "../FVMActors.sol";
 import {FVMAddress} from "../FVMAddress.sol";
 import {CBOR_CODEC, EMPTY_CODEC} from "../FVMCodec.sol";
+import {FVMActor} from "./FVMActor.sol";
 import {
     EXIT_SUCCESS,
     INSUFFICIENT_FUNDS,
@@ -54,7 +55,7 @@ contract FVMCallActorById {
             abi.decode(msg.data, (uint64, uint256, uint64, uint64, bytes, uint64));
 
         if (m.actorId == BURN_ACTOR_ID) {
-            _handleBurn(m);
+            _handleAccount(m, BURN_ADDRESS);
         } else if (m.actorId == STORAGE_POWER_ACTOR_ID) {
             _handlePower(m);
         } else if (m.actorId == DATACAP_TOKEN_ACTOR_ID) {
@@ -62,11 +63,16 @@ contract FVMCallActorById {
         } else if (_isMockMiner(FVMAddress.maskedAddress(m.actorId))) {
             _handleMiner(m);
         } else {
-            // Unknown actor: no actor at this ID in our mock state.
-            // Matches real FVM: send_raw returns ErrorNumber::NotFound → negative exit code, success=true.
-            bytes memory response = abi.encode(NOT_FOUND, uint64(0), bytes(""));
-            assembly ("memory-safe") {
-                return(add(response, 0x20), mload(response))
+            address actorAddress = FVMActor(RESOLVE_ADDRESS).actorAddresses(m.actorId);
+            if (actorAddress != address(0)) {
+                _handleAccount(m, actorAddress);
+            } else {
+                // Unknown actor: no actor at this ID in our mock state.
+                // Matches real FVM: send_raw returns ErrorNumber::NotFound → negative exit code, success=true.
+                bytes memory response = abi.encode(NOT_FOUND, uint64(0), bytes(""));
+                assembly ("memory-safe") {
+                    return(add(response, 0x20), mload(response))
+                }
             }
         }
     }
@@ -105,7 +111,9 @@ contract FVMCallActorById {
         }
     }
 
-    function _handleBurn(Message memory m) private returns (bytes memory) {
+    /// @dev Serves an existing actor as an account actor.
+    /// @param recipient The EVM address credited with the value of a SEND
+    function _handleAccount(Message memory m, address recipient) private returns (bytes memory) {
         // Invalid flag bits: precompile only accepts READONLY_FLAG (bit 0); unknown bits → PrecompileError.
         if (m.flags & ~READONLY_FLAG != 0) {
             assembly ("memory-safe") {
@@ -150,7 +158,7 @@ contract FVMCallActorById {
         bytes memory resp;
         if (address(this).balance >= m.value) {
             VM.deal(address(this), address(this).balance - m.value);
-            VM.deal(BURN_ADDRESS, BURN_ADDRESS.balance + m.value);
+            VM.deal(recipient, recipient.balance + m.value);
             resp = abi.encode(EXIT_SUCCESS, EMPTY_CODEC, bytes(""));
         } else {
             resp = abi.encode(INSUFFICIENT_FUNDS, EMPTY_CODEC, bytes(""));

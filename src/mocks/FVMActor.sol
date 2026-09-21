@@ -24,6 +24,9 @@ contract FVMActor {
     // Mapping from Filecoin address bytes to actor ID
     mapping(bytes32 => uint64) public addressMocks;
 
+    // Mapping from actor ID to the EVM address holding its balance
+    mapping(uint64 => address) public actorAddresses;
+
     constructor() {
         // Protocol 0 (f0) mappings for system singleton actors
         _mockf0(SYSTEM_ACTOR_ID);
@@ -49,21 +52,36 @@ contract FVMActor {
         // Protocol 0 address = protocol byte (0x00) + actor ID
         bytes memory filAddress = actorId.f0();
         addressMocks[keccak256(filAddress)] = actorId;
+        actorAddresses[actorId] = actorId.maskedAddress();
     }
 
     /// @notice Mock a Filecoin address resolution
     /// @param filAddress The Filecoin address bytes
-    /// @param actorId The actor ID to return (0 means doesn't exist)
+    /// @param actorId The actor ID to return (nonzero)
     function mockResolveAddress(bytes memory filAddress, uint64 actorId) external {
+        require(actorId != 0, "FVMActor: cannot mock actor ID 0");
         addressMocks[keccak256(filAddress)] = actorId;
+        address addr;
+        if (filAddress.length == 22 && filAddress[0] == 0x04 && filAddress[1] == 0x0a) {
+            assembly ("memory-safe") {
+                addr := shr(96, mload(add(filAddress, 0x22)))
+            }
+            require(addr != address(0), "FVMActor: cannot mock the zero address");
+        } else {
+            addr = actorId.maskedAddress();
+        }
+        actorAddresses[actorId] = addr;
     }
 
     /// @notice Mock a Solidity address resolution
     /// @param addr The Solidity address
-    /// @param actorId The actor ID to return (0 means doesn't exist)
+    /// @param actorId The actor ID to return (nonzero)
     function mockResolveAddress(address addr, uint64 actorId) external {
+        require(addr != address(0), "FVMActor: cannot mock the zero address");
+        require(actorId != 0, "FVMActor: cannot mock actor ID 0");
         bytes memory filAddress = abi.encodePacked(uint8(0x04), uint8(0x0a), addr);
         addressMocks[keccak256(filAddress)] = actorId;
+        actorAddresses[actorId] = addr;
     }
 
     fallback() external {

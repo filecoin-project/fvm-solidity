@@ -182,14 +182,12 @@ contract ResolveAddressTest is MockFVMTest {
         assertEq(actorId, expectedActorId, "Actor ID should be 99");
     }
 
-    function testMaskedIdAddressSystemActor() public {
+    function testMaskedIdAddressSystemActor() public view {
         // System actor: f00 -> 0xff + 11 zeros + actor ID
         uint64 expectedActorId = 0;
         address maskedSystemActor = address(bytes20(abi.encodePacked(hex"ff", bytes11(0), expectedActorId)));
 
-        // Mock the f0 address for actor 0
-        ACTOR_PRECOMPILE.mockResolveAddress(expectedActorId.f0(), expectedActorId);
-
+        // The system actor's f0 address is mocked by the FVMActor constructor
         (bool exists, uint64 actorId) = maskedSystemActor.tryGetActorId();
 
         assertTrue(exists, "System actor should exist");
