@@ -32,19 +32,86 @@ library FVMAddress {
     /// @dev Reverts unless the address is the canonical encoding: protocol byte 0x00 followed by exactly one
     ///      minimal unsigned LEB128 varint that fits in a uint64.
     function actorId(bytes memory f0Address) internal pure returns (uint64) {
-        uint256 length = f0Address.length;
-        require(length >= 2 && length <= 11 && uint8(f0Address[0]) == 0x00, InvalidF0Address(f0Address));
-
         uint256 id;
-        for (uint256 i = 1; i < length; ++i) {
-            uint8 byteVal = uint8(f0Address[i]);
-            // Only the last byte clears the continuation bit
-            require((byteVal & 0x80 == 0) == (i == length - 1), InvalidF0Address(f0Address));
-            id |= uint256(byteVal & 0x7F) << (7 * (i - 1));
+        uint256 bad;
+        assembly ("memory-safe") {
+            let length := mload(f0Address)
+            // Byte 0 is the protocol, byte i + 1 is varint byte i
+            let word := mload(add(f0Address, 0x20))
+            bad := byte(0, word)
+            // Accumulate each byte with its continuation bit, then subtract the bits at the terminator.
+            // The terminator must be the last byte, so the length is checked there.
+            for {} 1 {} {
+                let b := byte(1, word)
+                id := b
+                if iszero(shr(7, b)) {
+                    bad := or(bad, xor(length, 2))
+                    break
+                }
+                b := byte(2, word)
+                id := add(id, shl(7, b))
+                if iszero(shr(7, b)) {
+                    id := sub(id, 0x80)
+                    bad := or(bad, or(xor(length, 3), iszero(b)))
+                    break
+                }
+                b := byte(3, word)
+                id := add(id, shl(14, b))
+                if iszero(shr(7, b)) {
+                    id := sub(id, 0x4080)
+                    bad := or(bad, or(xor(length, 4), iszero(b)))
+                    break
+                }
+                b := byte(4, word)
+                id := add(id, shl(21, b))
+                if iszero(shr(7, b)) {
+                    id := sub(id, 0x204080)
+                    bad := or(bad, or(xor(length, 5), iszero(b)))
+                    break
+                }
+                b := byte(5, word)
+                id := add(id, shl(28, b))
+                if iszero(shr(7, b)) {
+                    id := sub(id, 0x10204080)
+                    bad := or(bad, or(xor(length, 6), iszero(b)))
+                    break
+                }
+                b := byte(6, word)
+                id := add(id, shl(35, b))
+                if iszero(shr(7, b)) {
+                    id := sub(id, 0x810204080)
+                    bad := or(bad, or(xor(length, 7), iszero(b)))
+                    break
+                }
+                b := byte(7, word)
+                id := add(id, shl(42, b))
+                if iszero(shr(7, b)) {
+                    id := sub(id, 0x40810204080)
+                    bad := or(bad, or(xor(length, 8), iszero(b)))
+                    break
+                }
+                b := byte(8, word)
+                id := add(id, shl(49, b))
+                if iszero(shr(7, b)) {
+                    id := sub(id, 0x2040810204080)
+                    bad := or(bad, or(xor(length, 9), iszero(b)))
+                    break
+                }
+                b := byte(9, word)
+                id := add(id, shl(56, b))
+                if iszero(shr(7, b)) {
+                    id := sub(id, 0x102040810204080)
+                    bad := or(bad, or(xor(length, 10), iszero(b)))
+                    break
+                }
+                // The tenth byte holds the top bit of a uint64, so it can only be 1
+                b := byte(10, word)
+                id := sub(add(id, shl(63, b)), 0x8102040810204080)
+                bad := or(bad, or(xor(length, 11), xor(b, 1)))
+                break
+            }
         }
-        // A zero final byte after the first is a non-minimal encoding
-        require(length == 2 || uint8(f0Address[length - 1]) != 0, InvalidF0Address(f0Address));
-        require(id <= type(uint64).max, InvalidF0Address(f0Address));
+        require(bad == 0, InvalidF0Address(f0Address));
         return uint64(id);
     }
 
