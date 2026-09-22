@@ -3,7 +3,7 @@
 RPC_URL=https://api.calibration.node.glif.io/rpc/v1
 
 # Demo.sol
-ADDRESS=0x1Ff1ceFcf1739d1b6aD4B2Cd27FB970A3214d174
+ADDRESS=0x68E18d918C98Af5F3c4a74E2DF99A40Ca80f29A7
 
 estimateGas() {
     curl -H "Content-Type: application/json" -X POST --data "{\"id\": 1, \"method\": \"eth_estimateGas\", \"params\": [{\"to\": \"$ADDRESS\", \"data\": \"$1\", \"value\": \"$2\"}, \"latest\"]}" $RPC_URL

@@ -179,7 +179,9 @@ contract BigBrainTest is MockFVMTest {
 
 ## Gas Profiling
 
-These measurements were performed on the [Demo](./src/Demo.sol) contract with the [gas-profile](./tools/gas-profile.sh) script.
+These measurements were performed on the [Demo](./src/Demo.sol) contract, deployed to Calibration testnet at
+[`0x68E18d918C98Af5F3c4a74E2DF99A40Ca80f29A7`](https://filecoin-testnet.blockscout.com/address/0x68E18d918C98Af5F3c4a74E2DF99A40Ca80f29A7),
+with the [gas-profile](./tools/gas-profile.sh) script.
 Note that gas costs [are roughly 444x higher in the FEVM](https://docs.filecoin.io/smart-contracts/filecoin-evm-runtime/difference-with-ethereum#gas-costs) compared to the EVM.
 
 | Method | Demo.sol estimateGas |
