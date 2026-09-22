@@ -3,6 +3,7 @@ pragma solidity ^0.8.30;
 
 library FVMAddress {
     error NotMaskedIdAddress(address addr);
+    error InvalidF0Address(bytes f0Address);
 
     /// @notice Creates an f0 (ID) address in bytes using unsigned LEB128 encoding
     /// @param id Actor ID to encode
@@ -25,6 +26,26 @@ library FVMAddress {
         assembly ("memory-safe") {
             mstore(buffer, i) // Set the correct length of the bytes array
         }
+    }
+
+    /// @notice Decodes the actor ID of an f0 (ID) address, the inverse of `f0`
+    /// @dev Reverts unless the address is the canonical encoding: protocol byte 0x00 followed by exactly one
+    ///      minimal unsigned LEB128 varint that fits in a uint64.
+    function actorId(bytes memory f0Address) internal pure returns (uint64) {
+        uint256 length = f0Address.length;
+        require(length >= 2 && length <= 11 && uint8(f0Address[0]) == 0x00, InvalidF0Address(f0Address));
+
+        uint256 id;
+        for (uint256 i = 1; i < length; ++i) {
+            uint8 byteVal = uint8(f0Address[i]);
+            // Only the last byte clears the continuation bit
+            require((byteVal & 0x80 == 0) == (i == length - 1), InvalidF0Address(f0Address));
+            id |= uint256(byteVal & 0x7F) << (7 * (i - 1));
+        }
+        // A zero final byte after the first is a non-minimal encoding
+        require(length == 2 || uint8(f0Address[length - 1]) != 0, InvalidF0Address(f0Address));
+        require(id <= type(uint64).max, InvalidF0Address(f0Address));
+        return uint64(id);
     }
 
     /// @notice Creates an f4 (delegated) address in bytes

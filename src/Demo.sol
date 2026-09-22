@@ -95,6 +95,11 @@ contract Demo {
         return actorId.f0();
     }
 
+    /// @notice Decode the actor ID of an f0 address
+    function fromF0(bytes calldata f0Address) external pure returns (uint64) {
+        return FVMAddress.actorId(f0Address);
+    }
+
     /// @notice Encode a Solidity address as an f410 address (EVM namespace)
     function toF410(address addr) external pure returns (bytes memory) {
         return addr.f410();
