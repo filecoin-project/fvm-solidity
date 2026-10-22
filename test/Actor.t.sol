@@ -41,17 +41,10 @@ contract ResolveAddressTest is MockFVMTest {
         }
     }
 
-    function testConstructorDoesNotMockUnknownActors() public view {
-        // Actor IDs 8 and 9 should NOT be mocked
-        uint64[2] memory unknownActors = [uint64(8), 9];
-        bytes memory f0Actor8 = unknownActors[0].f0();
-        bytes memory f0Actor9 = unknownActors[1].f0();
-
-        (bool exists8,) = f0Actor8.tryGetActorId();
-        (bool exists9,) = f0Actor9.tryGetActorId();
-
-        assertFalse(exists8, "Actor 8 should not exist");
-        assertFalse(exists9, "Actor 9 should not exist");
+    function testConstructorDoesNotMockUnknownActors() public {
+        // Actor IDs 8 and 9 resolve as f0 addresses, but the actors should NOT be mocked
+        assertFalse(FVMActor.exists(8), "Actor 8 should not exist");
+        assertFalse(FVMActor.exists(9), "Actor 9 should not exist");
     }
 
     // =============================================================
@@ -72,15 +65,38 @@ contract ResolveAddressTest is MockFVMTest {
     }
 
     function testTryGetActorIdDoesNotExists() public view {
-        // Mock a Filecoin address that doesn't exist
-        uint64 actorIdToMock = 2500;
-        bytes memory filAddress = actorIdToMock.f0();
+        // An unregistered f410 address is not resolved
+        bytes memory filAddress = address(0xdead).f410();
 
-        // Don't mock it, so it returns 0 (doesn't exist)
         (bool exists, uint64 actorId) = filAddress.tryGetActorId();
 
         assertFalse(exists, "Actor should not exist");
         assertEq(actorId, 0, "Actor ID should be 0");
+    }
+
+    function testTryGetActorIdF0WithoutRegistration() public view {
+        // An f0 address resolves to its own ID without registration
+        uint64 unregistered = 2500;
+
+        (bool exists, uint64 actorId) = unregistered.f0().tryGetActorId();
+
+        assertTrue(exists, "f0 should resolve");
+        assertEq(actorId, unregistered, "Actor ID should match");
+    }
+
+    function testResolveMalformedF0Reverts() public {
+        bytes[5] memory malformed = [
+            bytes(hex"00"), // no varint
+            hex"0080", // truncated varint
+            hex"008000", // non-minimal varint
+            hex"0080808080808080808002", // overflows uint64
+            hex"0001ff" // trailing byte
+        ];
+
+        for (uint256 i = 0; i < malformed.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FVMAddress.InvalidF0Address.selector, malformed[i]));
+            this._getActorIdBytes(malformed[i]);
+        }
     }
 
     function testGetActorId() public {
@@ -94,8 +110,7 @@ contract ResolveAddressTest is MockFVMTest {
     }
 
     function testGetActorIdReverts() public {
-        uint64 actorIdToMock = 2500;
-        bytes memory filAddress = actorIdToMock.f0();
+        bytes memory filAddress = address(0xdead).f410();
 
         // Should revert because actor doesn't exist
         vm.expectRevert(abi.encodeWithSelector(FVMActor.ActorNotFound.selector, filAddress));
@@ -209,22 +224,15 @@ contract ResolveAddressTest is MockFVMTest {
         assertEq(actorId, expectedActorId, "Actor ID should be 1234");
     }
 
-    function testMaskedIdAddressDoesNotExist() public view {
-        // Masked ID for non-existent actor
+    function testMaskedIdAddressResolvesWithoutActor() public {
+        // Masked ID for non-existent actor still resolves, but the actor does not exist
         address maskedAddr = address(bytes20(abi.encodePacked(hex"ff", bytes11(0), uint64(0x9999))));
 
-        (bool exists, uint64 actorId) = maskedAddr.tryGetActorId();
+        (bool resolved, uint64 actorId) = maskedAddr.tryGetActorId();
 
-        assertFalse(exists, "Non-existent masked ID actor should not exist");
-        assertEq(actorId, 0, "Actor ID should be 0");
-    }
-
-    function testMaskedIdAddressGetActorIdReverts() public {
-        // Masked ID for non-existent actor
-        address maskedAddr = address(bytes20(abi.encodePacked(hex"ff", bytes11(0), uint64(0x9999))));
-
-        vm.expectRevert(abi.encodeWithSelector(FVMActor.EVMActorNotFound.selector, maskedAddr));
-        this._getActorIdAddress(maskedAddr);
+        assertTrue(resolved, "Masked ID should resolve");
+        assertEq(actorId, 0x9999, "Actor ID should be 0x9999");
+        assertFalse(FVMActor.exists(actorId), "Actor should not exist");
     }
 
     function testNonMaskedIdAddressStillUsesF410() public {
